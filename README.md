@@ -154,13 +154,14 @@ Do not rely on network arrival order without a layer that respects §3.4.
 | Command | Role (summary) |
 | -------- | ---------------- |
 | `emit` | Motion + cascade; `--timestamp`; `--trace-file`; `rusthome.toml` |
+| `turn-off-light` | `TurnOffLight` + R7; `--trace-file`; optional `--command-id` / `--causal-chain-id` |
 | `observed-light` | Observed light fact + reconciliation §14.7 |
 | `state` / `replay` | JSON projection; double replay |
 | `snapshot` / `repair` | Snapshot + `state_hash`; journal repair §8.5 |
 | `explain` / `rules-doc` | Cascade by `causal_chain_id`; Mermaid consumes→produces |
 | `bench` | Micro-bench ingest (tmp journal) |
 
-Flags, env (`RUSTHOME_DATA_DIR`, `RUSTHOME_RULES_PRESET`), `rusthome.toml`, digests: **[docs/implementation.md](docs/implementation.md#cli-rusthome)** · `rusthome --help` · [configs/rusthome.example.toml](configs/rusthome.example.toml).
+Flags, env (`RUSTHOME_DATA_DIR`, `RUSTHOME_RULES_PRESET`), `rusthome.toml`, digests: **[docs/implementation.md](docs/implementation.md#cli-rusthome)** · `rusthome --help` · [configs/rusthome.example.toml](configs/rusthome.example.toml). Library templates: [docs/integration.md](docs/integration.md) (`append_observed`, `ingest_turn_off` examples).
 
 ---
 

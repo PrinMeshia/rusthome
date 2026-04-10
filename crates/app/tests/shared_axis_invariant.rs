@@ -70,7 +70,7 @@ fn dual_subscribers_fixed_journal_shape() {
         ObservationEvent::MotionDetected {
             room: "dual-sub".into(),
         },
-        Uuid::from_u128(0xD00A_11),
+        Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_00D0_0A11),
         limits,
     )
     .unwrap();

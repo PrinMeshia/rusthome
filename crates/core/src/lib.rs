@@ -15,12 +15,14 @@ pub mod view;
 
 pub use command_id::{deterministic_command_id, COMMAND_ID_NAMESPACE};
 pub use config::{ConfigSnapshot, PhysicalProjectionMode};
-pub use error::{ApplyError, RunError};
+pub use error::{ApplyError, JournalSchemaError, RunError};
 pub use event::{
     CommandEvent, CommandIoPhase, ErrorOccurredEvent, Event, EventKind, FactEvent,
     LightActuatorState, ObservationEvent, Provenance,
 };
-pub use journal::{JournalEntry, SCHEMA_VERSION};
+pub use journal::{
+    journal_schema_supported, JournalEntry, MIN_SUPPORTED_JOURNAL_SCHEMA, SCHEMA_VERSION,
+};
 pub use reducer::{apply_event, validate_fact_for_append};
 pub use rules::{Rule, RuleContext};
 pub use state::State;

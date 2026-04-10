@@ -79,6 +79,7 @@ pub enum FactEvent {
 #[serde(tag = "variant", rename_all = "snake_case")]
 pub enum CommandEvent {
     TurnOnLight { room: String, command_id: Uuid },
+    TurnOffLight { room: String, command_id: Uuid },
     NotifyUser { command_id: Uuid },
     LogUsage { item: String, command_id: Uuid },
 }
@@ -87,6 +88,7 @@ impl CommandEvent {
     pub fn command_id(&self) -> Uuid {
         match self {
             CommandEvent::TurnOnLight { command_id, .. }
+            | CommandEvent::TurnOffLight { command_id, .. }
             | CommandEvent::NotifyUser { command_id }
             | CommandEvent::LogUsage { command_id, .. } => *command_id,
         }
@@ -124,6 +126,7 @@ pub enum Event {
 pub enum EventKind {
     MotionDetected,
     TurnOnLight,
+    TurnOffLight,
     NotifyUser,
     LightOn,
     LightOff,
@@ -145,6 +148,7 @@ impl Event {
                 EventKind::StateCorrectedFromObservation
             }
             Event::Command(CommandEvent::TurnOnLight { .. }) => EventKind::TurnOnLight,
+            Event::Command(CommandEvent::TurnOffLight { .. }) => EventKind::TurnOffLight,
             Event::Command(CommandEvent::NotifyUser { .. }) => EventKind::NotifyUser,
             Event::Command(CommandEvent::LogUsage { .. }) => EventKind::LogUsage,
             Event::Observation(ObservationEvent::MotionDetected { .. }) => {

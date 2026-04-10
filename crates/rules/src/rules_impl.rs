@@ -157,6 +157,72 @@ impl Rule for R3 {
     }
 }
 
+/// `TurnOffLight` command → `LightOff` + `CommandIo` (same IO shape as R3).
+pub struct R7;
+
+impl Rule for R7 {
+    fn rule_id(&self) -> &str {
+        "R7"
+    }
+
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    fn consumes(&self) -> &[EventKind] {
+        const C: &[EventKind] = &[EventKind::TurnOffLight];
+        C
+    }
+
+    fn produces(&self) -> &[EventKind] {
+        const P: &[EventKind] = &[EventKind::LightOff, EventKind::CommandIo];
+        P
+    }
+
+    fn namespaces(&self) -> Vec<&str> {
+        vec!["lighting"]
+    }
+
+    fn eval(&self, event: &Event, ctx: &RuleContext<'_>) -> Vec<Event> {
+        match event {
+            Event::Command(CommandEvent::TurnOffLight { room, command_id }) => {
+                let prov = match ctx.config.physical_projection_mode {
+                    PhysicalProjectionMode::Simulation => Provenance::Derived,
+                    PhysicalProjectionMode::IoAnchored => Provenance::Derived,
+                };
+                let deadline = ctx
+                    .trigger_timestamp
+                    .checked_add(ctx.config.io_timeout_logical_delta);
+                let room = room.clone();
+                let cid = *command_id;
+                vec![
+                    Event::Fact(FactEvent::LightOff {
+                        room: room.clone(),
+                        provenance: prov,
+                    }),
+                    Event::Fact(FactEvent::CommandIo {
+                        command_id: Some(cid),
+                        room: Some(room.clone()),
+                        phase: CommandIoPhase::Dispatched {
+                            logical_deadline: deadline,
+                        },
+                        provenance: Provenance::Derived,
+                    }),
+                    Event::Fact(FactEvent::CommandIo {
+                        command_id: Some(cid),
+                        room: Some(room.clone()),
+                        phase: CommandIoPhase::Acked,
+                        provenance: Provenance::Derived,
+                    }),
+                ]
+            }
+            _ => vec![],
+        }
+    }
+}
+
+pub static R7_TURNOFF_FACT: R7 = R7;
+
 pub struct R4;
 
 impl Rule for R4 {

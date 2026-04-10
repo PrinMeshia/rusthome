@@ -13,7 +13,7 @@ pub enum RulesPreset {
     V0,
     /// R1+R3+R4+R5 (no R2 notify); digest `rules-home` for prod snapshots.
     Home,
-    /// Motion → light + IO only (R1 + R3), without notify or usage log.
+    /// Motion → light + IO (R1 + R3 + R7), without notify or usage log.
     Minimal,
 }
 

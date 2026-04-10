@@ -5,10 +5,10 @@ use std::time::Instant;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use rusthome_app::{
-    append_observed_light_fact, ingest_observation, ingest_observation_with_causal_traced,
-    replay_state, ObservedLightAppend,
+    append_observed_light_fact, ingest_command_with_causal, ingest_command_with_causal_traced,
+    ingest_observation, ingest_observation_with_causal_traced, replay_state, ObservedLightAppend,
 };
-use rusthome_core::{ObservationEvent, PhysicalProjectionMode, RuleEvaluationRecord};
+use rusthome_core::{CommandEvent, ObservationEvent, PhysicalProjectionMode, RuleEvaluationRecord};
 use rusthome_infra::{
     load_and_sort, repair_journal, verify_contiguous_sequence, Journal, Snapshot,
 };
@@ -23,7 +23,7 @@ struct Cli {
     data_dir: PathBuf,
 
     /// Rules bundle: `--rules-preset` > `RUSTHOME_RULES_PRESET` > `rusthome.toml` > `v0`.
-    /// Values: `v0` (R1–R5 + notify), `home` (R1+R3+R4+R5, digest `rules-home`), `minimal` (R1+R3).
+    /// Values: `v0` (R1–R5 + R7 + notify), `home` (R1+R3+R7+R4+R5, digest `rules-home`), `minimal` (R1+R3+R7).
     #[arg(long = "rules-preset", global = true, env = "RUSTHOME_RULES_PRESET")]
     rules_preset: Option<String>,
 
@@ -53,6 +53,27 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         write_snapshot: bool,
         /// Default: `rules-v0` / `rules-home` / `rules-minimal` per preset.
+        #[arg(long = "snapshot-rules-digest")]
+        snapshot_rules_digest: Option<String>,
+    },
+    /// Append `TurnOffLight` command and run rules (R7 → `LightOff` + IO facts in Simulation).
+    TurnOffLight {
+        #[arg(long)]
+        timestamp: i64,
+        #[arg(long, default_value = "hall")]
+        room: String,
+        /// `command_id` for this line (default: random). Duplicate ids → no new line (§14.3).
+        #[arg(long = "command-id")]
+        command_id: Option<String>,
+        /// `causal_chain_id` for this cascade (default: random). Set for reproducible journals / `explain`.
+        #[arg(long = "causal-chain-id")]
+        causal_chain_id: Option<String>,
+        #[arg(long, default_value_t = false)]
+        io_anchored: bool,
+        #[arg(long)]
+        trace_file: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        write_snapshot: bool,
         #[arg(long = "snapshot-rules-digest")]
         snapshot_rules_digest: Option<String>,
     },
@@ -184,6 +205,85 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &config,
                     timestamp,
                     ObservationEvent::MotionDetected { room },
+                    run_limits.clone(),
+                )?;
+            }
+            if write_snapshot {
+                let digest =
+                    config::resolve_rules_digest(snapshot_rules_digest.as_deref(), preset);
+                save_snapshot(&cli.data_dir, &digest)?;
+                println!("snapshot written");
+            }
+        }
+        Commands::TurnOffLight {
+            timestamp,
+            room,
+            command_id,
+            causal_chain_id,
+            io_anchored,
+            trace_file,
+            write_snapshot,
+            snapshot_rules_digest,
+        } => {
+            let config = config::build_runtime_config(&rusthome_file, io_anchored);
+            let jpath = journal_path(&cli.data_dir);
+            let mut journal = Journal::open(&jpath)?;
+            journal.set_fsync_after_append(cli.journal_fsync);
+            let mut state = replay_state(&jpath)?;
+            let command_uuid = match command_id.as_deref() {
+                Some(s) => Uuid::parse_str(s).map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("invalid --command-id {s:?}: {e}"),
+                    )
+                })?,
+                None => Uuid::new_v4(),
+            };
+            let causal = match causal_chain_id.as_deref() {
+                Some(s) => Uuid::parse_str(s).map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("invalid --causal-chain-id {s:?}: {e}"),
+                    )
+                })?,
+                None => Uuid::new_v4(),
+            };
+            if let Some(path) = trace_file {
+                let mut trace_buf: Vec<RuleEvaluationRecord> = Vec::new();
+                ingest_command_with_causal_traced(
+                    &mut journal,
+                    &mut state,
+                    &registry,
+                    &config,
+                    timestamp,
+                    CommandEvent::TurnOffLight {
+                        room: room.clone(),
+                        command_id: command_uuid,
+                    },
+                    causal,
+                    run_limits.clone(),
+                    Some(&mut trace_buf),
+                )?;
+                use std::io::Write;
+                let mut f = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&path)?;
+                for row in trace_buf {
+                    writeln!(f, "{}", serde_json::to_string(&row)?)?;
+                }
+            } else {
+                ingest_command_with_causal(
+                    &mut journal,
+                    &mut state,
+                    &registry,
+                    &config,
+                    timestamp,
+                    CommandEvent::TurnOffLight {
+                        room,
+                        command_id: command_uuid,
+                    },
+                    causal,
                     run_limits.clone(),
                 )?;
             }

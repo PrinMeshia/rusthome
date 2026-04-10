@@ -10,7 +10,7 @@
 | Perf | §7.1 — p95 under load on Pi | `bench`, `scripts/bench-p95.sh`, [perf-assumptions.md](perf-assumptions.md) |
 | Rules | `home` preset ≠ `v0` | **Done** — `arc_rules_home()` = R1+R3+R4+R5 (no R2) |
 | Schema | New event types (beyond light) | `schema_version`, journal migration |
-| Integration | Real device adapter | **Starter:** [integration.md](integration.md) + `rusthome-app` example `append_observed`; extend with MQTT/GPIO |
+| Integration | Real device adapter | **Starter:** [integration.md](integration.md) + examples `append_observed`, `ingest_turn_off`; extend with MQTT/GPIO |
 
 ## Refocus
 

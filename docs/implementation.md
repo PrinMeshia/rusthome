@@ -29,7 +29,7 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 | §7.1             | Throughput, p95 SLO, micro-bench                                      | Partial  | `rusthome bench` + [`scripts/bench-p95.sh`](../scripts/bench-p95.sh) (multiple runs); p95 under real load to calibrate manually. |
 | §8.0             | JSON Lines UTF-8                                                        | OK       |                                                                                                                   |
 | §8.1             | Synchronous append, single writer                                       | OK       | Global CLI `--journal-fsync` + `Journal::set_fsync_after_append`.                                          |
-| §8.2             | `schema_version`                                                        | OK       | `schema_version` **3**: `ErrorOccurred` (EPIC 4); see [errors.md](errors.md).                                  |
+| §8.2             | `schema_version`                                                        | OK       | **3** current append; load accepts **2..=3** via `journal_schema_supported` / `JournalEntry::validate_supported_schema` ([rules-changelog.md](rules-changelog.md)); `ErrorOccurred` (EPIC 4); see [errors.md](errors.md). |
 | §8.3             | Canonical JSON (sorted keys, no floats)                                 | OK       | `to_canonical_line` (recursive sort); top-level key test + infra round-trip.                                      |
 | §8.4             | Snapshot + `state_hash`                                                 | OK       | `snapshot` + `emit --write-snapshot` (digest via `--snapshot-rules-digest` / `--rules-digest`, default `rules-v0` \| `rules-home` \| `rules-minimal` per preset).                    |
 | §8.5             | Corruption, fail fast, repair                                           | OK       | Strict parse, `repair_journal` + CLI `repair`.                                                                    |
@@ -57,7 +57,7 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 | Crate              | Role                                                                                                                                                            |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **rusthome-core**  | Event types (3 families), `State`, `apply_event` / `validate_fact_for_append`, `JournalEntry`, `Rule` / `StateView` traits, domain errors               |
-| **rusthome-rules** | Demo rules (R1–R5), presets `v0` / `home` (no R2) / `minimal`, registry, boot validation (cycles §6.13, fan-in §6.15, family transitions §6.17, `produces` consistency) |
+| **rusthome-rules** | Demo rules (R1–R5 + R7 `TurnOffLight`), presets `v0` / `home` (no R2) / `minimal`, registry, boot validation (cycles §6.13, fan-in §6.15, family transitions §6.17, `produces` consistency) |
 | **rusthome-app**   | FIFO pipeline: per processed journal line — `apply_event` if fact, then rules, immediate append of emissions, §6.6 caps    |
 | **rusthome-infra** | **Canonical** JSON Lines journal §8.3, `JournalAppend` / `JournalAppendOutcome` (command dedup §14.3), sort, timestamp gate, snapshot + `state_hash`, `repair_journal`, optional `fsync` |
 | **rusthome-cli**   | `rusthome` binary (clap)                                                                                                                                       |
@@ -100,6 +100,7 @@ Under `--data-dir` (default: `data/`):
 | Command | Description |
 | -------- | ----------- |
 | `emit --timestamp … [--room …] [--io-anchored] [--trace-file PATH] [--write-snapshot] [--snapshot-rules-digest …]` | Motion observation + cascade; §15 trace; runtime config from `rusthome.toml`; snapshot after run if requested |
+| `turn-off-light --timestamp … [--room …] [--command-id UUID] [--causal-chain-id UUID] [--io-anchored] [--trace-file PATH] [--write-snapshot]` | `TurnOffLight`; R7 → `LightOff` + `CommandIo` (Simulation); IoAnchored rejects Derived actuator like `emit`; §15 trace optional |
 | `state` | Replay → JSON `State` |
 | `replay` | Double replay |
 | `snapshot [--rules-digest …]` | Writes `snapshot.json` (default digest = preset) |

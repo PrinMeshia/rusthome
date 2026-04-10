@@ -5,7 +5,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
-use rusthome_core::{Event, JournalEntry, SCHEMA_VERSION};
+use rusthome_core::{Event, JournalEntry, JournalSchemaError, SCHEMA_VERSION};
 use uuid::Uuid;
 
 use crate::canon::to_canonical_line;
@@ -180,6 +180,19 @@ pub fn load_and_sort(path: &Path) -> Result<Vec<JournalEntry>, JournalError> {
             line: i + 1,
             message: e.to_string(),
         })?;
+        let line_no = i + 1;
+        entry.validate_supported_schema().map_err(|e| match e {
+            JournalSchemaError::UnsupportedVersion {
+                found,
+                min,
+                max,
+            } => JournalError::UnsupportedSchemaVersion {
+                line: line_no,
+                found,
+                min,
+                max,
+            },
+        })?;
         entries.push(entry);
     }
     entries.sort_by_key(JournalEntry::sort_key);
@@ -216,7 +229,11 @@ pub fn repair_journal(path: &Path, backup_suffix: &str) -> Result<(usize, usize)
         if t.is_empty() {
             continue;
         }
-        if serde_json::from_str::<JournalEntry>(t).is_ok() {
+        let ok = match serde_json::from_str::<JournalEntry>(t) {
+            Ok(e) => e.validate_supported_schema().is_ok(),
+            Err(_) => false,
+        };
+        if ok {
             valid_lines.push(line.to_string());
             kept += 1;
         } else {
@@ -234,4 +251,46 @@ pub fn repair_journal(path: &Path, backup_suffix: &str) -> Result<(usize, usize)
     )
     .map_err(|e| JournalError::io(path.to_path_buf(), e))?;
     Ok((kept, dropped))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    use tempfile::NamedTempFile;
+    use uuid::Uuid;
+
+    #[test]
+    fn load_rejects_schema_version_below_min() {
+        let line = format!(
+            r#"{{"schema_version":1,"timestamp":0,"sequence":0,"causal_chain_id":"{}","family":"observation","variant":"motion_detected","room":"x"}}"#,
+            Uuid::nil()
+        );
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "{line}").unwrap();
+        let err = load_and_sort(f.path()).unwrap_err();
+        match err {
+            JournalError::UnsupportedSchemaVersion {
+                line: 1,
+                found: 1,
+                min: 2,
+                max: 3,
+            } => {}
+            e => panic!("unexpected error: {e:?}"),
+        }
+    }
+
+    #[test]
+    fn load_accepts_schema_version_2_minimal_line() {
+        let line = format!(
+            r#"{{"schema_version":2,"timestamp":0,"sequence":0,"causal_chain_id":"{}","family":"observation","variant":"motion_detected","room":"hall"}}"#,
+            Uuid::nil()
+        );
+        let mut f = NamedTempFile::new().unwrap();
+        writeln!(f, "{line}").unwrap();
+        let entries = load_and_sort(f.path()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].schema_version, 2);
+    }
 }

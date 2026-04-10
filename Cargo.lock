@@ -487,6 +487,7 @@ dependencies = [
  "rusthome-core",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tracing",
  "uuid",

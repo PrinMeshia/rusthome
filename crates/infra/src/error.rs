@@ -8,6 +8,13 @@ pub enum JournalError {
     TimestampRegressed { ts: i64, last: i64 },
     #[error("journal corrupt at line {line}: {message}")]
     Corrupt { line: usize, message: String },
+    #[error("unsupported journal schema_version {found} at line {line} (supported {min}..={max})")]
+    UnsupportedSchemaVersion {
+        line: usize,
+        found: u32,
+        min: u32,
+        max: u32,
+    },
     #[error("duplicate or gap in sequence: expected {expected}, found {found} at line {line}")]
     SequenceMismatch {
         line: usize,

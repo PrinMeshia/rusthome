@@ -65,13 +65,13 @@ impl Registry {
         Self::from_rules(crate::bundle::arc_rules_v0(), &[])
     }
 
-    /// R1 + R3 + R4 + R5: same light / usage-log chain as the demo, **without** `NotifyUser` (R2).
+    /// R1 + R3 + R7 + R4 + R5: same light / usage-log chain as the demo, **without** `NotifyUser` (R2).
     /// Default snapshot digest: `rules-home` ([`RulesPreset::Home`](crate::preset::RulesPreset)).
     pub fn home_default() -> Self {
         Self::from_rules(crate::bundle::arc_rules_home(), &[])
     }
 
-    /// Motion → light command → light / IO facts (R1 + R3), without notify or usage-log chain (R2, R4, R5).
+    /// Motion → light command → light / IO facts (R1 + R3 + R7), without notify or usage-log chain (R2, R4, R5).
     pub fn minimal_default() -> Self {
         Self::from_rules(crate::bundle::arc_rules_minimal(), &[])
     }
@@ -200,6 +200,10 @@ fn sample_event(kind: EventKind) -> Option<Event> {
             room: "_".into(),
             command_id: Uuid::from_u128(0x0001),
         })),
+        EventKind::TurnOffLight => Some(Event::Command(CommandEvent::TurnOffLight {
+            room: "_".into(),
+            command_id: Uuid::from_u128(0x0001_0002),
+        })),
         EventKind::NotifyUser => Some(Event::Command(CommandEvent::NotifyUser {
             command_id: Uuid::from_u128(0x0002),
         })),
@@ -298,8 +302,8 @@ mod tests {
         let h = Registry::home_default();
         let v_ids: Vec<_> = v.rules().iter().map(|r| r.rule_id()).collect();
         let h_ids: Vec<_> = h.rules().iter().map(|r| r.rule_id()).collect();
-        assert_eq!(v_ids, vec!["R1", "R2", "R3", "R4", "R5"]);
-        assert_eq!(h_ids, vec!["R1", "R3", "R4", "R5"]);
+        assert_eq!(v_ids, vec!["R1", "R2", "R3", "R7", "R4", "R5"]);
+        assert_eq!(h_ids, vec!["R1", "R3", "R7", "R4", "R5"]);
     }
 
     struct GreedyRule;

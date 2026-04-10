@@ -8,6 +8,7 @@ This document is an **initial taxonomy** for operations. Exact variants evolve w
 | Source                             | Example                                         | Typical action                                                |
 | ---------------------------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | `JournalError::Corrupt`            | Invalid JSON, truncated line                    | `rusthome repair` then analysis; restore from backup            |
+| `JournalError::UnsupportedSchemaVersion` | Line `schema_version` outside **2..=3**   | Upgrade tool / migration, or restore backup; see [rules-changelog.md](rules-changelog.md) |
 | `JournalError::SequenceMismatch`   | Duplicate or gap in `sequence`                  | Same path; journal inconsistent with model                    |
 | `JournalError::TimestampRegressed` | Live append with logical time below last commit | Fix upstream (§3.4); no silent patch                        |
 | Process crash / OOM                | —                                               | Restart; replay from journal (§14.2)                        |
