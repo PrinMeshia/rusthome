@@ -20,4 +20,5 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy -p rusthome-rules --all-targets -- -D warnings
       - run: cargo clippy --workspace --all-targets
+      - run: cargo build -p rusthome-app --examples
       - run: cargo test --workspace
