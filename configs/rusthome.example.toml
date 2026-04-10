@@ -1,0 +1,14 @@
+# Copy into your data-dir (e.g. `data/rusthome.toml`).
+#
+# Precedence: CLI flags (`--rules-preset`, `--io-anchored`) > this file > engine defaults.
+# Presets: "v0" (R1–R5, digest rules-v0), "home" (no R2 notify, digest rules-home), "minimal" (R1+R3).
+
+rules_preset = "home"
+# physical_projection_mode = "simulation"   # or "io_anchored" if emit/observed-light omit --io-anchored
+# io_timeout_logical_delta = 60              # integer > 0 (engine default 60 if omitted)
+#
+# [run_limits]
+# max_events_per_run = 10000
+# max_events_generated_per_root = 500
+# max_wall_ms_per_run = 30000
+# max_pending_events = 50000

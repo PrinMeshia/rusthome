@@ -1,0 +1,6 @@
+/target/
+**/*.rs.bk
+
+# Default CLI --data-dir (local journal / snapshot)
+/data/events.jsonl
+/data/snapshot.json

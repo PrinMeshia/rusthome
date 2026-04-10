@@ -1,0 +1,5 @@
+# Plan §6.12.1 — keep rules deterministic (no wall clock in crate).
+disallowed-types = [
+    "std::time::Instant",
+    "std::time::SystemTime",
+]
