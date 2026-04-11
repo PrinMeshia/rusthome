@@ -41,6 +41,7 @@ The system is built on **persisted events** in a journal. Three **families** (im
 | Orchestration | `rusthome-app`   | FIFO, synchronous append of derived events, run caps     |
 | Persistence  | `rusthome-infra` | JSONL, `sequence`, snapshot, repair                     |
 | Interface    | `rusthome-cli`   | Command line                                            |
+| Web (dev)    | `rusthome-web`   | Read-only dashboard + JSON APIs (`/`, `/api/state`, …)  |
 
 
 ### 2.4 Explicit time
@@ -160,6 +161,8 @@ Do not rely on network arrival order without a layer that respects §3.4.
 | `snapshot` / `repair` | Snapshot + `state_hash`; journal repair §8.5 |
 | `explain` / `rules-doc` | Cascade by `causal_chain_id`; Mermaid consumes→produces |
 | `bench` | Micro-bench ingest (tmp journal) |
+
+**Web (lab):** `cargo run -p rusthome-web -- --data-dir data` → [http://127.0.0.1:8080](http://127.0.0.1:8080) — read-only projection + JSON (`/api/state`, `/api/journal?limit=40`). No auth; keep local bind.
 
 Flags, env (`RUSTHOME_DATA_DIR`, `RUSTHOME_RULES_PRESET`), `rusthome.toml`, digests: **[docs/implementation.md](docs/implementation.md#cli-rusthome)** · `rusthome --help` · [configs/rusthome.example.toml](configs/rusthome.example.toml). Library templates: [docs/integration.md](docs/integration.md) (`append_observed`, `ingest_turn_off` examples).
 

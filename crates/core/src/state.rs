@@ -46,4 +46,18 @@ impl State {
     pub fn light_last_provenance(&self, room: &str) -> Option<Provenance> {
         self.light_last_provenance.get(room).copied()
     }
+
+    /// Rooms in deterministic order with on/off and last provenance — for dashboards / HTTP APIs.
+    pub fn light_room_rows(&self) -> Vec<(String, bool, Option<Provenance>)> {
+        self.lights
+            .iter()
+            .map(|(room, on)| {
+                (
+                    room.clone(),
+                    *on,
+                    self.light_last_provenance.get(room).copied(),
+                )
+            })
+            .collect()
+    }
 }

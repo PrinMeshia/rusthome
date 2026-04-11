@@ -61,6 +61,7 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 | **rusthome-app**   | FIFO pipeline + `rusthome_file` module: `rusthome.toml` load, preset resolution, `ConfigSnapshot` + `RunLimits` merge (same as CLI) |
 | **rusthome-infra** | **Canonical** JSON Lines journal §8.3, `JournalAppend` / `JournalAppendOutcome` (command dedup §14.3), sort, timestamp gate, snapshot + `state_hash`, `repair_journal`, optional `fsync` |
 | **rusthome-cli**   | `rusthome` binary (clap)                                                                                                                                       |
+| **rusthome-web**   | `rusthome-web` — read-only Axum server: HTML projection + `/api/state`, `/api/journal`, `/api/health` (lab; default bind `127.0.0.1:8080`)                      |
 
 
 **No wall clock** in domain logic: CLI requires explicit `--timestamp` on `emit`; runner uses `Instant` only for run time budget (§6.6.3), not event ordering.
@@ -111,6 +112,17 @@ Under `--data-dir` (default: `data/`):
 | `observed-light --timestamp … --room … --state on|off [--io-anchored] [--write-snapshot]` | **Observed** light fact + correction if **Derived** projection diverges |
 
 Global: `--data-dir` (env `RUSTHOME_DATA_DIR`), `--rules-preset` (env `RUSTHOME_RULES_PRESET`, then file), `--journal-fsync`. `rusthome.toml`: strict parse + validation; optional `[run_limits]` (§6.6) for cascade caps.
+
+### `rusthome-web` (read-only UI)
+
+| Route | Description |
+| ----- | ------------- |
+| `GET /` | HTML: lights table + usage log line (replay) |
+| `GET /api/state` | JSON projection (`State`) |
+| `GET /api/journal?limit=N` | Last N lines (default 40, max 500): `sequence`, `timestamp`, `kind` |
+| `GET /api/health` | `{"ok":true}` |
+
+Run: `cargo run -p rusthome-web -- --data-dir data` · `--bind 127.0.0.1:8080` (default). Env `RUSTHOME_DATA_DIR` supported. **Not hardened** — local / lab only.
 
 ## Rule registry (boot)
 

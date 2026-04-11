@@ -45,6 +45,10 @@ Extend these with your transport; keep **domain logic** in rules, **I/O** in the
 
 Examples and custom adapters should call **`rusthome_app::rusthome_file`** (same types as `crates/cli/src/config.rs`, which re-exports this module). That loads `rusthome.toml` when present and merges `physical_projection_mode`, `io_timeout_logical_delta`, `[run_limits]`, with `--rules-preset` / `--io-anchored` overrides matching the CLI.
 
+## Web dashboard (lab)
+
+`rusthome-web` replays the same `events.jsonl` as `rusthome state` and serves a minimal HTML page plus JSON APIs. Use the **same `--data-dir`** as the CLI. See [implementation.md — rusthome-web](implementation.md#rusthome-web-read-only-ui).
+
 ## Truth and coarse state
 
 Observed on/off does not encode *why* the lamp is off (burnt bulb, breaker, command). See [reconciliation.md](reconciliation.md) for provenance and V0 limits.
