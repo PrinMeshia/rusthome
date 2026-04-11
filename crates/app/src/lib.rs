@@ -5,6 +5,7 @@
 
 mod pipeline;
 mod reconciliation;
+pub mod rusthome_file;
 
 pub use pipeline::{drain_fifo, RunLimits};
 pub use reconciliation::{

@@ -447,9 +447,11 @@ dependencies = [
  "rusthome-core",
  "rusthome-infra",
  "rusthome-rules",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror",
+ "toml",
  "tracing",
  "uuid",
 ]

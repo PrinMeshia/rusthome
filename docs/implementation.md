@@ -58,7 +58,7 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **rusthome-core**  | Event types (3 families), `State`, `apply_event` / `validate_fact_for_append`, `JournalEntry`, `Rule` / `StateView` traits, domain errors               |
 | **rusthome-rules** | Demo rules (R1–R5 + R7 `TurnOffLight`), presets `v0` / `home` (no R2) / `minimal`, registry, boot validation (cycles §6.13, fan-in §6.15, family transitions §6.17, `produces` consistency) |
-| **rusthome-app**   | FIFO pipeline: per processed journal line — `apply_event` if fact, then rules, immediate append of emissions, §6.6 caps    |
+| **rusthome-app**   | FIFO pipeline + `rusthome_file` module: `rusthome.toml` load, preset resolution, `ConfigSnapshot` + `RunLimits` merge (same as CLI) |
 | **rusthome-infra** | **Canonical** JSON Lines journal §8.3, `JournalAppend` / `JournalAppendOutcome` (command dedup §14.3), sort, timestamp gate, snapshot + `state_hash`, `repair_journal`, optional `fsync` |
 | **rusthome-cli**   | `rusthome` binary (clap)                                                                                                                                       |
 

@@ -12,35 +12,38 @@ The FIFO engine does **not** read sensors or the network. A separate **adapter**
 | **Library** `rusthome_app::append_observed_light_fact` | Custom code: MQTT, REST webhook, GPIO poller, … |
 | **Library** `rusthome_app::ingest_observation_with_causal` | Push `Observation` events (e.g. motion) with your own `causal_chain_id` |
 | **Library** `rusthome_app::ingest_command_with_causal` | Push `Command` lines (e.g. `TurnOffLight` from a switch adapter) with your own `causal_chain_id` |
+| **Library** `rusthome_app::rusthome_file` | Load / validate `{data-dir}/rusthome.toml` — same helpers as the CLI (`load_rusthome_file`, `resolve_rules_preset`, `build_runtime_config`, `build_run_limits`) |
 
 ## Example binaries (templates)
 
 ### Observed light ([`append_observed.rs`](../crates/app/examples/append_observed.rs))
 
-1. `Journal::open` + `replay_state` on `data-dir/events.jsonl`
-2. Load a `RulesPreset` (same rule set as the rest of the deployment)
+1. `rusthome_file::load_rusthome_file` + `resolve_rules_preset` / `build_runtime_config` / `build_run_limits` (same merge order as CLI)
+2. `Journal::open` + `replay_state` on `data-dir/events.jsonl`
 3. `append_observed_light_fact` with **Observed** `LightOn` / `LightOff`
 
 ```bash
 cargo run -p rusthome-app --example append_observed -- \
-  --data-dir data --timestamp 100 --room hall --state off --rules-preset v0
+  --data-dir data --timestamp 100 --room hall --state off
 ```
+
+Optional `--rules-preset v0` overrides the file; default preset is `v0` if the file omits `rules_preset`.
 
 ### Turn-off command ([`ingest_turn_off.rs`](../crates/app/examples/ingest_turn_off.rs))
 
-1. Same journal + preset setup
+1. Same `rusthome.toml` loading as above
 2. `ingest_command_with_causal` with `CommandEvent::TurnOffLight` (optional `--command-id` / `--causal-chain-id` UUID strings, like CLI `turn-off-light`)
 
 ```bash
 cargo run -p rusthome-app --example ingest_turn_off -- \
-  --data-dir data --timestamp 200 --room hall --rules-preset minimal
+  --data-dir data --timestamp 200 --room hall
 ```
 
 Extend these with your transport; keep **domain logic** in rules, **I/O** in the adapter.
 
 ## Config parity with CLI
 
-The example accepts `--rules-preset` and `--io-anchored` only. The full CLI also merges `rusthome.toml` (`physical_projection_mode`, `io_timeout_logical_delta`, `[run_limits]`). For production adapters, either duplicate that loading (see `crates/cli/src/config.rs`) or share a small internal crate later.
+Examples and custom adapters should call **`rusthome_app::rusthome_file`** (same types as `crates/cli/src/config.rs`, which re-exports this module). That loads `rusthome.toml` when present and merges `physical_projection_mode`, `io_timeout_logical_delta`, `[run_limits]`, with `--rules-preset` / `--io-anchored` overrides matching the CLI.
 
 ## Truth and coarse state
 

@@ -9,7 +9,9 @@ description = "Orchestration: FIFO pipeline, rule engine wiring"
 rusthome-core = { path = "../core" }
 rusthome-rules = { path = "../rules" }
 rusthome-infra = { path = "../infra" }
+serde = { workspace = true }
 thiserror = { workspace = true }
+toml = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
