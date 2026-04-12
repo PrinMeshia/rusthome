@@ -104,6 +104,11 @@ enum Commands {
         #[arg(long, default_value_t = 50)]
         count: u32,
     },
+    /// Read-only web dashboard (same as the `rusthome-web` binary). Uses global `--data-dir`.
+    Serve {
+        #[arg(long, default_value = "127.0.0.1:8080")]
+        bind: String,
+    },
     /// Append an **Observed** light fact (reconciliation when Derived projection diverges).
     ObservedLight {
         #[arg(long)]
@@ -155,6 +160,14 @@ fn save_snapshot(data_dir: &Path, rules_digest: &str) -> Result<(), Box<dyn std:
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     std::fs::create_dir_all(&cli.data_dir)?;
+
+    if let Commands::Serve { bind } = &cli.command {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(rusthome_web::run(cli.data_dir.clone(), bind))?;
+        return Ok(());
+    }
 
     let rusthome_file = config::load_rusthome_file(&cli.data_dir)?;
     let preset = config::resolve_rules_preset(cli.rules_preset.as_deref(), &rusthome_file)?;
@@ -399,6 +412,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let ms = t0.elapsed().as_millis();
             println!("bench_emit count={count} elapsed_ms={ms}");
         }
+        Commands::Serve { .. } => unreachable!("serve is handled before registry load"),
     }
 
     Ok(())

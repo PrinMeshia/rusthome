@@ -47,7 +47,7 @@ Examples and custom adapters should call **`rusthome_app::rusthome_file`** (same
 
 ## Web dashboard (lab)
 
-`rusthome-web` replays the same `events.jsonl` as `rusthome state` and serves a minimal HTML page plus JSON APIs. Use the **same `--data-dir`** as the CLI. See [implementation.md — rusthome-web](implementation.md#rusthome-web-read-only-ui).
+`rusthome serve` (or the `rusthome-web` binary) replays the same `events.jsonl` as `rusthome state` and serves a minimal HTML page plus JSON APIs. Use the **same `--data-dir`** as other subcommands. See [implementation.md — rusthome-web](implementation.md#rusthome-web-read-only-ui).
 
 ## Truth and coarse state
 

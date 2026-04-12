@@ -694,9 +694,11 @@ dependencies = [
  "rusthome-core",
  "rusthome-infra",
  "rusthome-rules",
+ "rusthome-web",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "toml",
  "uuid",
 ]
