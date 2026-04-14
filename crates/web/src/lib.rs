@@ -2,6 +2,13 @@
 //!
 //! Used by the `rusthome-web` binary and by `rusthome serve` (CLI).
 
+mod bluetooth_info;
+mod html_pages;
+mod journal;
+mod security;
+mod system_info;
+mod util;
+
 use std::path::{Path, PathBuf};
 
 use axum::{
@@ -11,13 +18,22 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use rusthome_core::{EventKind, StateView};
-use serde::Deserialize;
-use serde::Serialize;
+use rusthome_core::StateView;
+
+use crate::html_pages::{
+    bluetooth_rows_html, journal_rows_html, lights_rows_html, render_dashboard_page,
+    render_system_page, system_host_rows, system_resource_rows, system_rusthome_rows,
+    DASHBOARD_JOURNAL_ROWS,
+};
+use crate::journal::{journal_tail_dtos, JournalQuery};
+use crate::security::security_banner_html;
+use crate::util::esc_html;
 
 #[derive(Clone)]
 struct AppState {
     data_dir: PathBuf,
+    /// Address passed to `TcpListener::bind` (shown on system page).
+    listen_display: String,
 }
 
 /// Run the Axum server until SIGINT (Ctrl+C). Creates `data_dir` if missing.
@@ -26,12 +42,16 @@ pub async fn run(data_dir: PathBuf, bind: &str) -> Result<(), Box<dyn std::error
 
     let state = AppState {
         data_dir: data_dir.clone(),
+        listen_display: bind.to_string(),
     };
 
     let app = Router::new()
         .route("/", get(page_dashboard))
+        .route("/system", get(page_system))
         .route("/api/state", get(api_state))
         .route("/api/journal", get(api_journal))
+        .route("/api/system", get(api_system))
+        .route("/api/bluetooth", get(api_bluetooth))
         .route("/api/health", get(api_health))
         .with_state(state);
 
@@ -55,14 +75,8 @@ fn journal_path(data_dir: &Path) -> PathBuf {
     data_dir.join("events.jsonl")
 }
 
-fn esc_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 async fn page_dashboard(State(st): State<AppState>) -> impl IntoResponse {
+    let security_banner = security_banner_html(&st.listen_display);
     let path = journal_path(&st.data_dir);
     let state = match rusthome_app::replay_state(&path) {
         Ok(s) => s,
@@ -78,65 +92,27 @@ async fn page_dashboard(State(st): State<AppState>) -> impl IntoResponse {
         }
     };
 
-    let mut rows_html = String::new();
-    let rows = state.light_room_rows();
-    if rows.is_empty() {
-        rows_html.push_str("<tr><td colspan=\"3\"><em>No rooms in projection yet</em></td></tr>");
-    } else {
-        for (room, on, prov) in rows {
-            let p = prov
-                .map(|p| format!("{p:?}"))
-                .unwrap_or_else(|| "—".to_string());
-            rows_html.push_str(&format!(
-                "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
-                esc_html(&room),
-                if on { "on" } else { "off" },
-                esc_html(&p),
-            ));
-        }
-    }
+    let journal_html = match journal_tail_dtos(&path, DASHBOARD_JOURNAL_ROWS) {
+        Ok(dto) => journal_rows_html(&dto),
+        Err(e) => format!(
+            r#"<tr><td colspan="3" class="cell-empty error">{}</td></tr>"#,
+            esc_html(&e)
+        ),
+    };
+
+    let rows_html = lights_rows_html(&state);
 
     let last_log = state
         .last_log_item()
         .map(esc_html)
         .unwrap_or_else(|| "<em>none</em>".into());
 
-    let html = format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rusthome</title>
-  <style>
-    :root {{ color-scheme: light dark; }}
-    body {{ font-family: system-ui, sans-serif; max-width: 56rem; margin: 0 auto; padding: 1rem 1.25rem; line-height: 1.45; }}
-    h1 {{ font-size: 1.35rem; margin-top: 0; }}
-    nav {{ margin: 0.75rem 0 1.25rem; }}
-    nav a {{ margin-right: 1rem; }}
-    table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; }}
-    th, td {{ border: 1px solid #8884; padding: 0.45rem 0.65rem; text-align: left; }}
-    th {{ font-weight: 600; }}
-    .meta {{ font-size: 0.9rem; opacity: 0.85; }}
-    code {{ font-size: 0.88rem; }}
-  </style>
-</head>
-<body>
-  <h1>rusthome — projection</h1>
-  <p class="meta">Read-only replay of <code>{}</code></p>
-  <nav><a href="/api/state">JSON state</a> · <a href="/api/journal?limit=40">JSON journal</a> · <a href="/api/health">health</a></nav>
-  <h2>Lights</h2>
-  <table>
-    <thead><tr><th>Room</th><th>State</th><th>Last provenance</th></tr></thead>
-    <tbody>{}</tbody>
-  </table>
-  <h2>Usage log (demo)</h2>
-  <p>{}</p>
-</body>
-</html>"#,
-        esc_html(&path.display().to_string()),
-        rows_html,
-        last_log,
+    let html = render_dashboard_page(
+        &security_banner,
+        &esc_html(&path.display().to_string()),
+        &rows_html,
+        &journal_html,
+        &last_log,
     );
     Html(html).into_response()
 }
@@ -153,55 +129,78 @@ async fn api_state(State(st): State<AppState>) -> impl IntoResponse {
     }
 }
 
-#[derive(Deserialize)]
-struct JournalQuery {
-    #[serde(default = "default_limit")]
-    limit: usize,
-}
-
-fn default_limit() -> usize {
-    40
-}
-
-#[derive(Serialize)]
-struct JournalLineDto {
-    sequence: u64,
-    timestamp: i64,
-    kind: EventKind,
-}
-
 async fn api_journal(
     State(st): State<AppState>,
     Query(q): Query<JournalQuery>,
 ) -> impl IntoResponse {
     let path = journal_path(&st.data_dir);
-    let entries = match rusthome_infra::load_and_sort(&path) {
-        Ok(e) => e,
-        Err(e) => {
+    match journal_tail_dtos(&path, q.limit) {
+        Ok(dto) => Json(dto).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("journal load: {e}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn page_system(State(st): State<AppState>) -> impl IntoResponse {
+    let st = st.clone();
+    let (snap, bt) = match tokio::task::spawn_blocking(move || {
+        let jp = journal_path(&st.data_dir);
+        (
+            system_info::capture(&st.listen_display, &st.data_dir, &jp),
+            bluetooth_info::snapshot(),
+        )
+    })
+    .await
+    {
+        Ok(pair) => pair,
+        Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("journal load: {e}"),
+                "system snapshot task failed",
             )
                 .into_response();
         }
     };
-    let lim = q.limit.clamp(1, 500);
-    let tail = if entries.len() > lim {
-        let start = entries.len() - lim;
-        let mut v = entries;
-        v.split_off(start)
-    } else {
-        entries
-    };
-    let dto: Vec<JournalLineDto> = tail
-        .into_iter()
-        .map(|e| JournalLineDto {
-            sequence: e.sequence,
-            timestamp: e.timestamp,
-            kind: e.event.kind(),
-        })
-        .collect();
-    Json(dto).into_response()
+    let security_banner = security_banner_html(&snap.listen);
+    let html = render_system_page(
+        &security_banner,
+        &system_rusthome_rows(&snap),
+        &system_host_rows(&snap),
+        &system_resource_rows(&snap),
+        &bluetooth_rows_html(&bt),
+    );
+    Html(html).into_response()
+}
+
+async fn api_system(State(st): State<AppState>) -> impl IntoResponse {
+    let st = st.clone();
+    match tokio::task::spawn_blocking(move || {
+        let jp = journal_path(&st.data_dir);
+        system_info::capture(&st.listen_display, &st.data_dir, &jp)
+    })
+    .await
+    {
+        Ok(snap) => Json(snap).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "system snapshot task failed",
+        )
+            .into_response(),
+    }
+}
+
+async fn api_bluetooth() -> impl IntoResponse {
+    match tokio::task::spawn_blocking(bluetooth_info::snapshot).await {
+        Ok(snap) => Json(snap).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "bluetooth snapshot task failed",
+        )
+            .into_response(),
+    }
 }
 
 async fn api_health() -> impl IntoResponse {

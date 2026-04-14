@@ -49,6 +49,8 @@ Examples and custom adapters should call **`rusthome_app::rusthome_file`** (same
 
 `rusthome serve` (or the `rusthome-web` binary) replays the same `events.jsonl` as `rusthome state` and serves a minimal HTML page plus JSON APIs. Use the **same `--data-dir`** as other subcommands. See [implementation.md — rusthome-web](implementation.md#rusthome-web-read-only-ui).
 
+There is **no authentication**. Keep the default **`127.0.0.1`** bind for local use; if you listen on all interfaces or a LAN IP, put **TLS + access control** (reverse proxy) in front — the HTML pages show a warning when the bind is not loopback-only. Step-by-step: [web-proxy.md](web-proxy.md).
+
 ## Truth and coarse state
 
 Observed on/off does not encode *why* the lamp is off (burnt bulb, breaker, command). See [reconciliation.md](reconciliation.md) for provenance and V0 limits.

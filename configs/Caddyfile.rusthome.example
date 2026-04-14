@@ -1,0 +1,21 @@
+# Example Caddy 2 config for rusthome (copy to /etc/caddy/ or run: caddy run --config ./Caddyfile)
+#
+# Prerequisites:
+#   rusthome serve --data-dir /path/to/data --bind 127.0.0.1:8080
+#
+# Replace rusthome.home.arpa with your hostname (or use :8443 + tls internal for LAN).
+
+rusthome.home.arpa {
+	# Uncomment for Let's Encrypt on a public DNS name:
+	# tls you@example.com
+
+	# Or internal CA for LAN-only (browsers must trust Caddy's local root):
+	tls internal
+
+	# Optional: HTTP Basic Auth (generate hash: caddy hash-password)
+	# basicauth /* {
+	# 	admin JDJhJDE0JGE4o...bcrypt-hash...
+	# }
+
+	reverse_proxy 127.0.0.1:8080
+}

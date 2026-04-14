@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# §7.1 — plusieurs runs `rusthome bench`, stats rudimentaires (médiane / max).
+# §7.1 — plusieurs runs `rusthome bench`, stats (min / median / p95 / max).
 set -euo pipefail
 RUNS="${1:-10}"
 COUNT="${2:-200}"
@@ -18,5 +18,9 @@ done
 printf '%s\n' "${times[@]}" | sort -n | awk -v n="$RUNS" '
   { a[NR]=$1 }
   END {
-    print "count=" n ", min=" a[1] ", max=" a[n] ", median=" a[int((n+1)/2)]
+    med = a[int((n + 1) / 2)]
+    p95i = int(0.95 * n + 0.999)
+    if (p95i < 1) p95i = 1
+    if (p95i > n) p95i = n
+    print "count=" n ", min=" a[1] ", median=" med ", p95=" a[p95i] ", max=" a[n]
   }'

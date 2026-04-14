@@ -25,11 +25,11 @@ If load exceeds the hypothesis, the runner may hit: timestamp monotonicity rejec
 
 ```bash
 cargo run -p rusthome-cli --release -- bench --count 200
-# Multiple runs + median / min / max (bash, GNU grep `-P`):
+# Multiple runs + min / median / p95 / max (bash, GNU grep `-P`):
 bash scripts/bench-p95.sh 10 200
 ```
 
-Each iteration uses room `bench-{i}` to avoid `LightAlreadyOn` on the same growing journal (V0 rules turn on a light per motion).
+Each iteration uses room `bench-{i}` to avoid `LightAlreadyOn` on the same growing journal (V0 rules turn on a light per motion). The script prints **p95** of `elapsed_ms` across runs (wall-clock for the whole bench command, not a single event).
 
 Record `elapsed_ms` on the target (e.g. Raspberry Pi) and update this file with an order of magnitude; compare to `max_wall_ms_per_run` in `RunLimits`.
 

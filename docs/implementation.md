@@ -61,7 +61,7 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 | **rusthome-app**   | FIFO pipeline + `rusthome_file` module: `rusthome.toml` load, preset resolution, `ConfigSnapshot` + `RunLimits` merge (same as CLI) |
 | **rusthome-infra** | **Canonical** JSON Lines journal §8.3, `JournalAppend` / `JournalAppendOutcome` (command dedup §14.3), sort, timestamp gate, snapshot + `state_hash`, `repair_journal`, optional `fsync` |
 | **rusthome-cli**   | `rusthome` binary (clap)                                                                                                                                       |
-| **rusthome-web**   | Library + `rusthome-web` binary; also **`rusthome serve`** (CLI) — read-only Axum: HTML + `/api/state`, `/api/journal`, `/api/health` (lab; default bind `127.0.0.1:8080`) |
+| **rusthome-web**   | Library + `rusthome-web` binary; also **`rusthome serve`** (CLI) — read-only Axum: dashboard `/`, system `/system`, JSON APIs incl. `/api/system` (lab; default bind `127.0.0.1:8080`) |
 
 
 **No wall clock** in domain logic: CLI requires explicit `--timestamp` on `emit`; runner uses `Instant` only for run time budget (§6.6.3), not event ordering.
@@ -117,12 +117,17 @@ Global: `--data-dir` (env `RUSTHOME_DATA_DIR`), `--rules-preset` (env `RUSTHOME_
 
 | Route | Description |
 | ----- | ------------- |
-| `GET /` | HTML: lights table + usage log line (replay) |
+| `GET /` | HTML dashboard: lights, journal tail, usage log (replay + live refresh) |
+| `GET /system` | HTML « system »: rusthome paths, host/OS, CPU, RAM, swap, load, sensors, disk, Bluetooth adapters (read-only) |
 | `GET /api/state` | JSON projection (`State`) |
 | `GET /api/journal?limit=N` | Last N lines (default 40, max 500): `sequence`, `timestamp`, `kind` |
+| `GET /api/system` | JSON host/resources snapshot (same fields as system page) |
+| `GET /api/bluetooth` | JSON Bluetooth: adapters (sysfs + `bluetoothctl show`) and `devices[]` (`bluetoothctl devices`, optional Paired/Connected flags), read-only |
 | `GET /api/health` | `{"ok":true}` |
 
 Run: **`rusthome serve`** (uses global `--data-dir`) or `cargo run -p rusthome-web -- --data-dir data`. **`serve`**: `--bind 127.0.0.1:8080` (default). Env `RUSTHOME_DATA_DIR` supported. **Not hardened** — local / lab only.
+
+**Security:** default bind is loopback. If you use `--bind 0.0.0.0:…` or another non-loopback address, the HTML UI shows a warning banner: APIs and system/Bluetooth views are **unauthenticated**. For LAN access, prefer a **reverse proxy** (TLS, auth, firewall) rather than exposing the Axum port directly. See [web-proxy.md](web-proxy.md) and `configs/Caddyfile.rusthome.example`, `configs/nginx-rusthome.conf.example`.
 
 ## Rule registry (boot)
 

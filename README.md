@@ -41,7 +41,7 @@ The system is built on **persisted events** in a journal. Three **families** (im
 | Orchestration | `rusthome-app`   | FIFO, synchronous append of derived events, run caps     |
 | Persistence  | `rusthome-infra` | JSONL, `sequence`, snapshot, repair                     |
 | Interface    | `rusthome-cli`   | Command line                                            |
-| Web (dev)    | `rusthome serve` / `rusthome-web` | Read-only dashboard + JSON APIs (`/`, `/api/state`, …)  |
+| Web (dev)    | `rusthome serve` / `rusthome-web` | Dashboard `/`, system `/system`, JSON (`/api/state`, `/api/system`, …) — **no auth**; default bind `127.0.0.1`; use a reverse proxy if you listen on the LAN  |
 
 
 ### 2.4 Explicit time
