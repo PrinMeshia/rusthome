@@ -13,6 +13,7 @@ The FIFO engine does **not** read sensors or the network. A separate **adapter**
 | **Library** `rusthome_app::ingest_observation_with_causal` | Push `Observation` events (e.g. motion) with your own `causal_chain_id` |
 | **Library** `rusthome_app::ingest_command_with_causal` | Push `Command` lines (e.g. `TurnOffLight` from a switch adapter) with your own `causal_chain_id` |
 | **Library** `rusthome_app::rusthome_file` | Load / validate `{data-dir}/rusthome.toml` — same helpers as the CLI (`load_rusthome_file`, `resolve_rules_preset`, `build_runtime_config`, `build_run_limits`) |
+| Example [`mqtt_motion_ingest`](../crates/app/examples/mqtt_motion_ingest.rs) | MQTT subscriber → `ingest_observation_with_causal` (`MotionDetected`); `rumqttc` with `default-features = false` (plain TCP) |
 
 ## Example binaries (templates)
 
@@ -37,6 +38,19 @@ Optional `--rules-preset v0` overrides the file; default preset is `v0` if the f
 ```bash
 cargo run -p rusthome-app --example ingest_turn_off -- \
   --data-dir data --timestamp 200 --room hall
+```
+
+### MQTT motion ([`mqtt_motion_ingest.rs`](../crates/app/examples/mqtt_motion_ingest.rs))
+
+1. Same `rusthome.toml` loading and journal replay as the other examples
+2. Subscribes with **`rumqttc`** (TCP; optional `--mqtt-user` / `--mqtt-password`)
+3. Each publish → `ingest_observation_with_causal` with `ObservationEvent::MotionDetected` and a fresh `causal_chain_id` (UUID)
+
+Payload: plain UTF-8 room name, or JSON `{"room":"…"}`; optional `"ts"` for logical time (otherwise wall ms, strictly increasing vs the last ingested event). If JSON has no `room`, the last topic segment is used when it looks like a name.
+
+```bash
+cargo run -p rusthome-app --example mqtt_motion_ingest -- \
+  --data-dir data --broker 127.0.0.1 --port 1883 --topic 'sensors/motion/#'
 ```
 
 Extend these with your transport; keep **domain logic** in rules, **I/O** in the adapter.
