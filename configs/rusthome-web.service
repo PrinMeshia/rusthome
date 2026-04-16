@@ -1,0 +1,28 @@
+[Unit]
+Description=rusthome web dashboard (read-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/projects/rusthome
+
+# Default bind 127.0.0.1:8080 (loopback only).
+# Use a reverse proxy (Caddy/nginx) for LAN access — see docs/web-proxy.md.
+ExecStart=/home/pi/projects/rusthome/target/release/rusthome serve \
+    --data-dir /home/pi/projects/rusthome/data
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rusthome-web
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/projects/rusthome/data
+
+[Install]
+WantedBy=multi-user.target

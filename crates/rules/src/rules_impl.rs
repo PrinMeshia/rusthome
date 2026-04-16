@@ -310,3 +310,174 @@ impl Rule for R5 {
 }
 
 pub static R5_LOG_USAGE_FACT: R5 = R5;
+
+/// TemperatureReading → TemperatureRecorded (Observation → Fact; whitelisted §6.17).
+pub struct R8;
+
+impl Rule for R8 {
+    fn rule_id(&self) -> &str {
+        "R8"
+    }
+
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    fn consumes(&self) -> &[EventKind] {
+        &[EventKind::TemperatureReading]
+    }
+
+    fn produces(&self) -> &[EventKind] {
+        &[EventKind::TemperatureRecorded]
+    }
+
+    fn namespaces(&self) -> Vec<&str> {
+        vec!["sensors"]
+    }
+
+    fn eval(&self, event: &Event, _ctx: &RuleContext<'_>) -> Vec<Event> {
+        match event {
+            Event::Observation(ObservationEvent::TemperatureReading {
+                sensor_id,
+                millidegrees_c,
+            }) => {
+                vec![Event::Fact(FactEvent::TemperatureRecorded {
+                    sensor_id: sensor_id.clone(),
+                    millidegrees_c: *millidegrees_c,
+                    provenance: Provenance::Observed,
+                })]
+            }
+            _ => vec![],
+        }
+    }
+}
+
+pub static R8_TEMPERATURE_FACT: R8 = R8;
+
+/// ContactChanged → ContactStateChanged (Observation → Fact; whitelisted §6.17).
+pub struct R9;
+
+impl Rule for R9 {
+    fn rule_id(&self) -> &str {
+        "R9"
+    }
+
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    fn consumes(&self) -> &[EventKind] {
+        &[EventKind::ContactChanged]
+    }
+
+    fn produces(&self) -> &[EventKind] {
+        &[EventKind::ContactStateChanged]
+    }
+
+    fn namespaces(&self) -> Vec<&str> {
+        vec!["sensors"]
+    }
+
+    fn eval(&self, event: &Event, _ctx: &RuleContext<'_>) -> Vec<Event> {
+        match event {
+            Event::Observation(ObservationEvent::ContactChanged { sensor_id, open }) => {
+                vec![Event::Fact(FactEvent::ContactStateChanged {
+                    sensor_id: sensor_id.clone(),
+                    open: *open,
+                    provenance: Provenance::Observed,
+                })]
+            }
+            _ => vec![],
+        }
+    }
+}
+
+pub static R9_CONTACT_FACT: R9 = R9;
+
+/// TemperatureRecorded → LogUsage (log temperature readings).
+pub struct R10;
+
+impl Rule for R10 {
+    fn rule_id(&self) -> &str {
+        "R10"
+    }
+
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    fn consumes(&self) -> &[EventKind] {
+        &[EventKind::TemperatureRecorded]
+    }
+
+    fn produces(&self) -> &[EventKind] {
+        &[EventKind::LogUsage]
+    }
+
+    fn namespaces(&self) -> Vec<&str> {
+        vec!["logging"]
+    }
+
+    fn eval(&self, event: &Event, ctx: &RuleContext<'_>) -> Vec<Event> {
+        match event {
+            Event::Fact(FactEvent::TemperatureRecorded { sensor_id, .. }) => {
+                let item = format!("temperature:{sensor_id}");
+                let command_id = deterministic_command_id(
+                    "R10",
+                    "log_usage",
+                    ctx.parent_sequence,
+                    ctx.causal_chain_id,
+                    &item,
+                );
+                vec![Event::Command(CommandEvent::LogUsage { item, command_id })]
+            }
+            _ => vec![],
+        }
+    }
+}
+
+pub static R10_TEMPERATURE_LOG: R10 = R10;
+
+/// ContactStateChanged → LogUsage (log contact sensor changes).
+pub struct R11;
+
+impl Rule for R11 {
+    fn rule_id(&self) -> &str {
+        "R11"
+    }
+
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    fn consumes(&self) -> &[EventKind] {
+        &[EventKind::ContactStateChanged]
+    }
+
+    fn produces(&self) -> &[EventKind] {
+        &[EventKind::LogUsage]
+    }
+
+    fn namespaces(&self) -> Vec<&str> {
+        vec!["logging"]
+    }
+
+    fn eval(&self, event: &Event, ctx: &RuleContext<'_>) -> Vec<Event> {
+        match event {
+            Event::Fact(FactEvent::ContactStateChanged { sensor_id, .. }) => {
+                let item = format!("contact:{sensor_id}");
+                let command_id = deterministic_command_id(
+                    "R11",
+                    "log_usage",
+                    ctx.parent_sequence,
+                    ctx.causal_chain_id,
+                    &item,
+                );
+                vec![Event::Command(CommandEvent::LogUsage { item, command_id })]
+            }
+            _ => vec![],
+        }
+    }
+}
+
+pub static R11_CONTACT_LOG: R11 = R11;

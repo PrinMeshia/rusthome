@@ -62,18 +62,18 @@ impl Registry {
     }
 
     pub fn v0_default() -> Self {
-        Self::from_rules(crate::bundle::arc_rules_v0(), &[])
+        Self::from_rules(crate::bundle::arc_rules_v0(), crate::bundle::SENSOR_WHITELIST)
     }
 
-    /// R1 + R3 + R7 + R4 + R5: same light / usage-log chain as the demo, **without** `NotifyUser` (R2).
+    /// Lights + IO + sensors + logging, **without** `NotifyUser` (R2).
     /// Default snapshot digest: `rules-home` ([`RulesPreset::Home`](crate::preset::RulesPreset)).
     pub fn home_default() -> Self {
-        Self::from_rules(crate::bundle::arc_rules_home(), &[])
+        Self::from_rules(crate::bundle::arc_rules_home(), crate::bundle::SENSOR_WHITELIST)
     }
 
-    /// Motion → light command → light / IO facts (R1 + R3 + R7), without notify or usage-log chain (R2, R4, R5).
+    /// Subset: motion → light + IO (R1 + R3 + R7), sensor facts (R8 + R9).
     pub fn minimal_default() -> Self {
-        Self::from_rules(crate::bundle::arc_rules_minimal(), &[])
+        Self::from_rules(crate::bundle::arc_rules_minimal(), crate::bundle::SENSOR_WHITELIST)
     }
 
     pub fn rules(&self) -> &[Arc<dyn Rule>] {
@@ -239,6 +239,32 @@ fn sample_event(kind: EventKind) -> Option<Event> {
                 provenance: Provenance::Derived,
             }))
         }
+        EventKind::TemperatureReading => {
+            Some(Event::Observation(ObservationEvent::TemperatureReading {
+                sensor_id: "_".into(),
+                millidegrees_c: 21000,
+            }))
+        }
+        EventKind::ContactChanged => {
+            Some(Event::Observation(ObservationEvent::ContactChanged {
+                sensor_id: "_".into(),
+                open: true,
+            }))
+        }
+        EventKind::TemperatureRecorded => {
+            Some(Event::Fact(FactEvent::TemperatureRecorded {
+                sensor_id: "_".into(),
+                millidegrees_c: 21000,
+                provenance: Provenance::Observed,
+            }))
+        }
+        EventKind::ContactStateChanged => {
+            Some(Event::Fact(FactEvent::ContactStateChanged {
+                sensor_id: "_".into(),
+                open: true,
+                provenance: Provenance::Observed,
+            }))
+        }
     }
 }
 
@@ -302,8 +328,14 @@ mod tests {
         let h = Registry::home_default();
         let v_ids: Vec<_> = v.rules().iter().map(|r| r.rule_id()).collect();
         let h_ids: Vec<_> = h.rules().iter().map(|r| r.rule_id()).collect();
-        assert_eq!(v_ids, vec!["R1", "R2", "R3", "R7", "R4", "R5"]);
-        assert_eq!(h_ids, vec!["R1", "R3", "R7", "R4", "R5"]);
+        assert_eq!(
+            v_ids,
+            vec!["R1", "R2", "R3", "R7", "R4", "R5", "R8", "R9", "R10", "R11"]
+        );
+        assert_eq!(
+            h_ids,
+            vec!["R1", "R3", "R7", "R4", "R5", "R8", "R9", "R10", "R11"]
+        );
     }
 
     struct GreedyRule;

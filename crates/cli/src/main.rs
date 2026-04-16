@@ -1,9 +1,12 @@
 mod config;
 
+use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use rusthome_app::mqtt_ingest::{dispatch_mqtt_publish, wall_millis};
 use rusthome_app::{
     append_observed_light_fact, ingest_command_with_causal, ingest_command_with_causal_traced,
     ingest_observation, ingest_observation_with_causal_traced, replay_state, ObservedLightAppend,
@@ -104,10 +107,19 @@ enum Commands {
         #[arg(long, default_value_t = 50)]
         count: u32,
     },
-    /// Read-only web dashboard (same as the `rusthome-web` binary). Uses global `--data-dir`.
+    /// All-in-one: embedded MQTT broker + ingest adapter + web dashboard.
     Serve {
         #[arg(long, default_value = "127.0.0.1:8080")]
         bind: String,
+        /// TCP port for the embedded MQTT broker (0 = OS-assigned).
+        #[arg(long, default_value_t = 1883)]
+        mqtt_port: u16,
+        /// MQTT topic filter for the ingest adapter.
+        #[arg(long, default_value = "sensors/#")]
+        mqtt_topic: String,
+        /// Disable the embedded broker (web dashboard only, like previous behaviour).
+        #[arg(long, default_value_t = false)]
+        no_broker: bool,
     },
     /// Append an **Observed** light fact (reconciliation when Derived projection diverges).
     ObservedLight {
@@ -161,11 +173,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     std::fs::create_dir_all(&cli.data_dir)?;
 
-    if let Commands::Serve { bind } = &cli.command {
+    if let Commands::Serve {
+        bind,
+        mqtt_port,
+        mqtt_topic,
+        no_broker,
+    } = &cli.command
+    {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
-        rt.block_on(rusthome_web::run(cli.data_dir.clone(), bind))?;
+        let data_dir = cli.data_dir.clone();
+        let bind = bind.clone();
+        let mqtt_port = *mqtt_port;
+        let mqtt_topic = mqtt_topic.clone();
+        let no_broker = *no_broker;
+
+        rt.block_on(async move {
+            serve_all_in_one(data_dir, bind, mqtt_port, mqtt_topic, no_broker).await
+        })?;
         return Ok(());
     }
 
@@ -412,7 +438,199 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let ms = t0.elapsed().as_millis();
             println!("bench_emit count={count} elapsed_ms={ms}");
         }
-        Commands::Serve { .. } => unreachable!("serve is handled before registry load"),
+        Commands::Serve { .. } => unreachable!("handled above"),
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// All-in-one: embedded MQTT broker + ingest + web dashboard
+// ---------------------------------------------------------------------------
+
+fn broker_config(mqtt_port: u16) -> rumqttd::Config {
+    let mut v4 = HashMap::new();
+    v4.insert(
+        "v4-tcp".to_string(),
+        rumqttd::ServerSettings {
+            name: "v4-tcp".to_string(),
+            listen: SocketAddr::from(([0, 0, 0, 0], mqtt_port)),
+            tls: None,
+            next_connection_delay_ms: 1,
+            connections: rumqttd::ConnectionSettings {
+                connection_timeout_ms: 5_000,
+                max_payload_size: 4096,
+                max_inflight_count: 100,
+                auth: None,
+                external_auth: None,
+                dynamic_filters: true,
+            },
+        },
+    );
+    rumqttd::Config {
+        id: 0,
+        router: rumqttd::RouterConfig {
+            max_connections: 32,
+            max_outgoing_packet_count: 200,
+            max_segment_size: 100 * 1024,
+            max_segment_count: 10,
+            custom_segment: None,
+            initialized_filters: None,
+            shared_subscriptions_strategy: Default::default(),
+        },
+        v4: Some(v4),
+        v5: None,
+        ws: None,
+        cluster: None,
+        console: None,
+        bridge: None,
+        prometheus: None,
+        metrics: None,
+    }
+}
+
+async fn serve_all_in_one(
+    data_dir: PathBuf,
+    bind: String,
+    mqtt_port: u16,
+    mqtt_topic: String,
+    no_broker: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(&data_dir)?;
+
+    if no_broker {
+        eprintln!("rusthome serve: broker disabled (--no-broker), web dashboard only");
+        return rusthome_web::run(data_dir, &bind).await;
+    }
+
+    let config = broker_config(mqtt_port);
+    let mut broker = rumqttd::Broker::new(config);
+
+    let (mut link_tx, mut link_rx) = broker
+        .link("rusthome-ingest")
+        .map_err(|e| format!("broker link error: {e}"))?;
+
+    link_tx
+        .subscribe(&mqtt_topic)
+        .map_err(|e| format!("subscribe error: {e}"))?;
+
+    eprintln!(
+        "rusthome serve: embedded MQTT broker on 0.0.0.0:{mqtt_port}, topic={mqtt_topic}, web={bind}"
+    );
+
+    // 1) Broker: blocking, runs in its own thread
+    let broker_handle = tokio::task::spawn_blocking(move || {
+        if let Err(e) = broker.start() {
+            eprintln!("broker error: {e}");
+        }
+    });
+
+    // 2) Ingest adapter: blocking loop reading from in-process link
+    let ingest_data_dir = data_dir.clone();
+    let ingest_handle = tokio::task::spawn_blocking(move || {
+        if let Err(e) = run_ingest_loop(&ingest_data_dir, &mut link_tx, &mut link_rx) {
+            eprintln!("ingest loop error: {e}");
+        }
+    });
+
+    // 3) Web dashboard (async, graceful shutdown on Ctrl-C)
+    let web_handle = tokio::spawn(async move {
+        if let Err(e) = rusthome_web::run(data_dir, &bind).await {
+            eprintln!("web error: {e}");
+        }
+    });
+
+    // Wait for any task to finish (web shutdown on Ctrl-C triggers the rest)
+    tokio::select! {
+        _ = web_handle => {},
+        _ = broker_handle => {},
+        _ = ingest_handle => {},
+    }
+
+    Ok(())
+}
+
+fn run_ingest_loop(
+    data_dir: &Path,
+    _link_tx: &mut rumqttd::local::LinkTx,
+    link_rx: &mut rumqttd::local::LinkRx,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rusthome_file = config::load_rusthome_file(data_dir)?;
+    let preset = config::resolve_rules_preset(None, &rusthome_file)?;
+    let registry = preset.load_registry()?;
+    let runtime_config = config::build_runtime_config(&rusthome_file, false);
+    let limits = config::build_run_limits(&rusthome_file);
+
+    let journal_path = data_dir.join("events.jsonl");
+    let mut journal = Journal::open(&journal_path)?;
+    let mut state = replay_state(&journal_path)?;
+    let mut last_ts = wall_millis();
+
+    // Consume initial SubAck from the subscription
+    match link_rx.recv() {
+        Ok(Some(rumqttd::Notification::DeviceAck(_))) => {
+            eprintln!("ingest: subscription acknowledged");
+        }
+        Ok(Some(other)) => {
+            eprintln!("ingest: unexpected first notification: {other:?}");
+        }
+        Ok(None) => {
+            eprintln!("ingest: empty first notification");
+        }
+        Err(e) => {
+            return Err(format!("ingest: recv suback error: {e}").into());
+        }
+    }
+
+    loop {
+        let notification = match link_rx.recv() {
+            Ok(Some(n)) => n,
+            Ok(None) => continue,
+            Err(e) => {
+                eprintln!("ingest link recv error: {e}");
+                break;
+            }
+        };
+
+        match notification {
+            rumqttd::Notification::Forward(fwd) => {
+                let topic = match std::str::from_utf8(&fwd.publish.topic) {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let payload = &fwd.publish.payload;
+
+                match dispatch_mqtt_publish(
+                    topic,
+                    payload,
+                    &mut journal,
+                    &mut state,
+                    &registry,
+                    &runtime_config,
+                    limits.clone(),
+                    &mut last_ts,
+                ) {
+                    Ok(Some(desc)) => {
+                        eprintln!("ingested {desc} topic={topic}");
+                    }
+                    Ok(None) => {
+                        eprintln!("skip unknown topic: {topic}");
+                    }
+                    Err(e) => {
+                        eprintln!("dispatch error on {topic}: {e}");
+                    }
+                }
+            }
+            rumqttd::Notification::Unschedule => {
+                // Router paused this connection (buffer full). Signal
+                // readiness so it reschedules us for the next batch.
+                if let Err(e) = link_rx.ready() {
+                    eprintln!("ingest link ready error: {e}");
+                    break;
+                }
+            }
+            _ => {}
+        }
     }
 
     Ok(())

@@ -97,7 +97,10 @@ pub fn validate_fact_for_append(state: &State, fact: &FactEvent) -> Result<(), A
             phase,
             ..
         } => validate_command_io(state, command_id, room, phase),
-        FactEvent::UsageLogged { .. } | FactEvent::StateCorrectedFromObservation { .. } => Ok(()),
+        FactEvent::UsageLogged { .. }
+        | FactEvent::StateCorrectedFromObservation { .. }
+        | FactEvent::TemperatureRecorded { .. }
+        | FactEvent::ContactStateChanged { .. } => Ok(()),
     }
 }
 
@@ -132,6 +135,18 @@ pub fn apply_event(state: &State, fact: &FactEvent) -> Result<State, ApplyError>
             apply_command_io_trackers(&mut next, command_id, room, phase);
         }
         FactEvent::StateCorrectedFromObservation { .. } => {}
+        FactEvent::TemperatureRecorded {
+            sensor_id,
+            millidegrees_c,
+            ..
+        } => {
+            next.temperatures.insert(sensor_id.clone(), *millidegrees_c);
+        }
+        FactEvent::ContactStateChanged {
+            sensor_id, open, ..
+        } => {
+            next.contacts.insert(sensor_id.clone(), *open);
+        }
     }
     Ok(next)
 }

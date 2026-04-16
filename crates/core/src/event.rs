@@ -71,6 +71,18 @@ pub enum FactEvent {
         observed: LightActuatorState,
         provenance: Provenance,
     },
+    /// Temperature reading committed to projection (millidegrees Celsius, e.g. 21500 = 21.5 °C).
+    TemperatureRecorded {
+        sensor_id: String,
+        millidegrees_c: i32,
+        provenance: Provenance,
+    },
+    /// Contact sensor state change (door/window; `true` = open).
+    ContactStateChanged {
+        sensor_id: String,
+        open: bool,
+        provenance: Provenance,
+    },
 }
 
 /// Commands — intentions, never applied directly to state.
@@ -100,6 +112,10 @@ impl CommandEvent {
 #[serde(tag = "variant", rename_all = "snake_case")]
 pub enum ObservationEvent {
     MotionDetected { room: String },
+    /// Temperature reading from a sensor (millidegrees Celsius).
+    TemperatureReading { sensor_id: String, millidegrees_c: i32 },
+    /// Contact sensor state change (door/window open/close).
+    ContactChanged { sensor_id: String, open: bool },
 }
 
 /// Persisted runtime error (EPIC 4) — no-op for `replay_state` / `apply_event`.
@@ -135,6 +151,10 @@ pub enum EventKind {
     CommandIo,
     StateCorrectedFromObservation,
     ErrorOccurred,
+    TemperatureReading,
+    ContactChanged,
+    TemperatureRecorded,
+    ContactStateChanged,
 }
 
 impl Event {
@@ -147,12 +167,20 @@ impl Event {
             Event::Fact(FactEvent::StateCorrectedFromObservation { .. }) => {
                 EventKind::StateCorrectedFromObservation
             }
+            Event::Fact(FactEvent::TemperatureRecorded { .. }) => EventKind::TemperatureRecorded,
+            Event::Fact(FactEvent::ContactStateChanged { .. }) => EventKind::ContactStateChanged,
             Event::Command(CommandEvent::TurnOnLight { .. }) => EventKind::TurnOnLight,
             Event::Command(CommandEvent::TurnOffLight { .. }) => EventKind::TurnOffLight,
             Event::Command(CommandEvent::NotifyUser { .. }) => EventKind::NotifyUser,
             Event::Command(CommandEvent::LogUsage { .. }) => EventKind::LogUsage,
             Event::Observation(ObservationEvent::MotionDetected { .. }) => {
                 EventKind::MotionDetected
+            }
+            Event::Observation(ObservationEvent::TemperatureReading { .. }) => {
+                EventKind::TemperatureReading
+            }
+            Event::Observation(ObservationEvent::ContactChanged { .. }) => {
+                EventKind::ContactChanged
             }
             Event::ErrorOccurred(_) => EventKind::ErrorOccurred,
         }
@@ -173,7 +201,9 @@ impl FactEvent {
             | FactEvent::LightOff { provenance, .. }
             | FactEvent::UsageLogged { provenance, .. }
             | FactEvent::CommandIo { provenance, .. }
-            | FactEvent::StateCorrectedFromObservation { provenance, .. } => *provenance,
+            | FactEvent::StateCorrectedFromObservation { provenance, .. }
+            | FactEvent::TemperatureRecorded { provenance, .. }
+            | FactEvent::ContactStateChanged { provenance, .. } => *provenance,
         }
     }
 }

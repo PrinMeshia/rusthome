@@ -1,32 +1,25 @@
-//! Subscribe to MQTT and append **`MotionDetected`** observations (adapter template).
+//! Subscribe to an **external** MQTT broker and ingest observations (adapter template).
 //!
-//! - **Payload**: UTF-8 room name, or JSON `{"room":"hall"}`; optional `"ts": <i64>` for logical
-//!   timestamp (otherwise uses wall-clock ms, bumped to stay strictly increasing vs the last append).
-//! - Loads `{data-dir}/rusthome.toml` like other examples (`--rules-preset` / `--io-anchored` override).
-//!
-//! Depends on **`rumqttc`** with **`default-features = false`** (plain TCP MQTT, no bundled rustls).
+//! Supports all observation types dispatched by [`rusthome_app::mqtt_ingest`]:
+//! - `sensors/motion/{room}` → `MotionDetected`
+//! - `sensors/temperature/{sensor_id}` → `TemperatureReading`
+//! - `sensors/contact/{sensor_id}` → `ContactChanged`
 //!
 //! ```text
 //! cargo run -p rusthome-app --example mqtt_motion_ingest -- \
-//!   --data-dir data --broker 127.0.0.1 --port 1883 --topic 'sensors/motion/#'
+//!   --data-dir data --broker 127.0.0.1 --port 1883 --topic 'sensors/#'
 //! ```
-//!
-//! Test publish (Mosquitto):
-//! `mosquitto_pub -t sensors/motion/hall -m hall` or `-m '{"room":"kitchen"}'`
 
-use std::cell::RefCell;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::Parser;
 use rumqttc::{Client, Event, Incoming, MqttOptions, QoS};
-use rusthome_app::{ingest_observation_with_causal, replay_state, rusthome_file};
-use rusthome_core::ObservationEvent;
+use rusthome_app::mqtt_ingest::{dispatch_mqtt_publish, wall_millis};
+use rusthome_app::{replay_state, rusthome_file};
 use rusthome_infra::Journal;
-use uuid::Uuid;
 
 #[derive(Parser, Debug)]
-#[command(about = "MQTT → MotionDetected adapter (library demo)")]
+#[command(about = "MQTT → observation adapter (connects to external broker)")]
 struct Args {
     #[arg(long, default_value = "data")]
     data_dir: PathBuf,
@@ -46,40 +39,6 @@ struct Args {
     mqtt_password: Option<String>,
 }
 
-fn wall_millis() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
-
-fn room_from_payload_and_topic(payload: &[u8], topic: &str) -> Result<String, String> {
-    let s = std::str::from_utf8(payload).map_err(|_| "payload is not UTF-8".to_string())?;
-    let s = s.trim();
-    if s.is_empty() {
-        return Err("empty payload".into());
-    }
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(s) {
-        if let Some(r) = v.get("room").and_then(|x| x.as_str()) {
-            return Ok(r.to_string());
-        }
-    }
-    if !s.contains('{') && s.len() < 256 {
-        return Ok(s.to_string());
-    }
-    let seg = topic.rsplit('/').next().filter(|x| !x.is_empty() && *x != "#" && *x != "+");
-    seg.map(String::from).ok_or_else(|| {
-        "could not parse room from JSON payload or topic tail; use {\"room\":\"…\"} or plain name"
-            .into()
-    })
-}
-
-fn optional_ts_from_payload(payload: &[u8]) -> Option<i64> {
-    let s = std::str::from_utf8(payload).ok()?.trim();
-    let v: serde_json::Value = serde_json::from_str(s).ok()?;
-    v.get("ts")?.as_i64()
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
@@ -93,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut journal = Journal::open(&journal_path)?;
     let mut state = replay_state(&journal_path)?;
 
-    let mut mqttoptions = MqttOptions::new("rusthome-mqtt-motion", &args.broker, args.port);
+    let mut mqttoptions = MqttOptions::new("rusthome-mqtt-ingest", &args.broker, args.port);
     mqttoptions.set_keep_alive(std::time::Duration::from_secs(30));
     if let (Some(u), Some(p)) = (&args.mqtt_user, &args.mqtt_password) {
         mqttoptions.set_credentials(u, p);
@@ -102,9 +61,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (client, mut connection) = Client::new(mqttoptions, 10);
     client.subscribe(&args.topic, QoS::AtLeastOnce)?;
 
-    let last_ts = RefCell::new(0i64);
+    let mut last_ts = wall_millis();
     eprintln!(
-        "mqtt_motion_ingest: data_dir={} broker={}:{} topic={}",
+        "mqtt_ingest: data_dir={} broker={}:{} topic={}",
         args.data_dir.display(),
         args.broker,
         args.port,
@@ -124,35 +83,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => continue,
         };
 
-        let room = match room_from_payload_and_topic(&payload, &topic) {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("skip publish on {topic}: {e}");
-                continue;
-            }
-        };
-
-        let candidate = optional_ts_from_payload(&payload).unwrap_or_else(wall_millis);
-        let ts = {
-            let mut t = last_ts.borrow_mut();
-            let n = (*t + 1).max(candidate);
-            *t = n;
-            n
-        };
-
-        let causal = Uuid::new_v4();
-        match ingest_observation_with_causal(
+        match dispatch_mqtt_publish(
+            &topic,
+            &payload,
             &mut journal,
             &mut state,
             &registry,
             &config,
-            ts,
-            ObservationEvent::MotionDetected { room: room.clone() },
-            causal,
             limits.clone(),
+            &mut last_ts,
         ) {
-            Ok(()) => eprintln!("ingested MotionDetected room={room} ts={ts} topic={topic}"),
-            Err(e) => eprintln!("ingest error room={room}: {e:?}"),
+            Ok(Some(desc)) => eprintln!("ingested {desc} topic={topic}"),
+            Ok(None) => eprintln!("skip unknown topic: {topic}"),
+            Err(e) => eprintln!("dispatch error on {topic}: {e}"),
         }
     }
 

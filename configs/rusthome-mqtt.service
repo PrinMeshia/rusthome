@@ -1,0 +1,33 @@
+[Unit]
+Description=rusthome MQTT motion ingest adapter
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/projects/rusthome
+
+# Adjust --broker, --port, --topic to match your setup.
+# Optional: --mqtt-user / --mqtt-password for authenticated brokers.
+# Optional: --rules-preset / --io-anchored override rusthome.toml.
+ExecStart=/home/pi/projects/rusthome/target/release/examples/mqtt_motion_ingest \
+    --data-dir /home/pi/projects/rusthome/data \
+    --broker 127.0.0.1 \
+    --port 1883 \
+    --topic sensors/motion/#
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rusthome-mqtt
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/projects/rusthome/data
+
+[Install]
+WantedBy=multi-user.target

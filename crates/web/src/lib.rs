@@ -18,12 +18,11 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use rusthome_core::StateView;
-
 use crate::html_pages::{
-    bluetooth_rows_html, journal_rows_html, lights_rows_html, render_dashboard_page,
-    render_system_page, system_host_rows, system_resource_rows, system_rusthome_rows,
-    DASHBOARD_JOURNAL_ROWS,
+    bluetooth_rows_html, contact_rows_html, journal_rows_html, lights_rows_html,
+    render_dashboard_page, render_sensors_page, render_system_page, sensors_rows_html,
+    summary_cards_html, system_host_rows, system_resource_rows, system_rusthome_rows,
+    temperature_rows_html, DASHBOARD_JOURNAL_ROWS,
 };
 use crate::journal::{journal_tail_dtos, JournalQuery};
 use crate::security::security_banner_html;
@@ -47,6 +46,7 @@ pub async fn run(data_dir: PathBuf, bind: &str) -> Result<(), Box<dyn std::error
 
     let app = Router::new()
         .route("/", get(page_dashboard))
+        .route("/sensors", get(page_sensors))
         .route("/system", get(page_system))
         .route("/api/state", get(api_state))
         .route("/api/journal", get(api_journal))
@@ -92,27 +92,57 @@ async fn page_dashboard(State(st): State<AppState>) -> impl IntoResponse {
         }
     };
 
-    let journal_html = match journal_tail_dtos(&path, DASHBOARD_JOURNAL_ROWS) {
-        Ok(dto) => journal_rows_html(&dto),
-        Err(e) => format!(
-            r#"<tr><td colspan="3" class="cell-empty error">{}</td></tr>"#,
-            esc_html(&e)
+    let (journal_html, journal_count) = match journal_tail_dtos(&path, DASHBOARD_JOURNAL_ROWS) {
+        Ok(dto) => {
+            let html = journal_rows_html(&dto);
+            let count = dto.last().map(|d| d.sequence + 1).unwrap_or(0) as usize;
+            (html, count)
+        }
+        Err(e) => (
+            format!(
+                r#"<tr><td colspan="3" class="cell-empty error">{}</td></tr>"#,
+                esc_html(&e)
+            ),
+            0,
         ),
     };
 
     let rows_html = lights_rows_html(&state);
-
-    let last_log = state
-        .last_log_item()
-        .map(esc_html)
-        .unwrap_or_else(|| "<em>none</em>".into());
+    let summary = summary_cards_html(&state, journal_count);
+    let sensors = sensors_rows_html(&state);
 
     let html = render_dashboard_page(
         &security_banner,
         &esc_html(&path.display().to_string()),
         &rows_html,
         &journal_html,
-        &last_log,
+        &summary,
+        &sensors,
+    );
+    Html(html).into_response()
+}
+
+async fn page_sensors(State(st): State<AppState>) -> impl IntoResponse {
+    let security_banner = security_banner_html(&st.listen_display);
+    let path = journal_path(&st.data_dir);
+    let state = match rusthome_app::replay_state(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Html(format!(
+                    "<!DOCTYPE html><html><body><h1>replay error</h1><pre>{}</pre></body></html>",
+                    esc_html(&e.to_string())
+                )),
+            )
+                .into_response();
+        }
+    };
+
+    let html = render_sensors_page(
+        &security_banner,
+        &temperature_rows_html(&state),
+        &contact_rows_html(&state),
     );
     Html(html).into_response()
 }

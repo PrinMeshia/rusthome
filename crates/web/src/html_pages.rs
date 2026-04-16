@@ -1,21 +1,11 @@
 //! Server-side HTML fragments and full page templates (`include_str!`).
 
-use rusthome_core::{EventKind, State as CoreState};
+use rusthome_core::State as CoreState;
 
 use crate::bluetooth_info;
 use crate::journal::JournalLineDto;
 use crate::system_info;
 use crate::util::esc_html;
-
-/// Tail length for the dashboard journal panel (SSR + JS refresh).
-pub(crate) const DASHBOARD_JOURNAL_ROWS: usize = 40;
-
-fn event_kind_snake(k: &EventKind) -> String {
-    serde_json::to_value(k)
-        .ok()
-        .and_then(|v| v.as_str().map(String::from))
-        .unwrap_or_else(|| format!("{k:?}"))
-}
 
 pub(crate) fn lights_rows_html(state: &CoreState) -> String {
     let mut rows_html = String::new();
@@ -50,14 +40,70 @@ pub(crate) fn journal_rows_html(dtos: &[JournalLineDto]) -> String {
     }
     let mut out = String::new();
     for line in dtos.iter().rev() {
-        let kind = event_kind_snake(&line.kind);
         out.push_str(&format!(
-            r#"<tr><td class="mono">{seq}</td><td class="mono">{ts}</td><td class="mono kind">{kind}</td></tr>"#,
+            r#"<tr><td class="mono">{seq}</td><td class="mono">{ts}</td><td><span class="badge badge-{family}">{detail}</span></td></tr>"#,
             seq = line.sequence,
             ts = line.timestamp,
-            kind = esc_html(&kind),
+            family = line.family,
+            detail = esc_html(&line.detail),
         ));
     }
+    out
+}
+
+/// Tail length for the dashboard journal panel (SSR + JS refresh).
+pub(crate) const DASHBOARD_JOURNAL_ROWS: usize = 40;
+
+pub(crate) fn summary_cards_html(state: &CoreState, journal_count: usize) -> String {
+    let rooms = state.light_room_rows().len();
+    let lights_on = state.light_room_rows().iter().filter(|(_, on, _)| *on).count();
+    let temp_count = state.temperature_readings().len();
+    let contact_count = state.contact_states().len();
+    let sensor_count = temp_count + contact_count;
+
+    format!(
+        r#"<div class="summary-card"><span class="summary-icon">{icon_rooms}</span><span class="summary-value">{rooms}</span><span class="summary-label">Rooms</span></div><div class="summary-card"><span class="summary-icon">{icon_light}</span><span class="summary-value">{lights_on}/{rooms}</span><span class="summary-label">Lights On</span></div><div class="summary-card"><span class="summary-icon">{icon_sensor}</span><span class="summary-value">{sensor_count}</span><span class="summary-label">Sensors</span></div><div class="summary-card"><span class="summary-icon">{icon_journal}</span><span class="summary-value">{journal_count}</span><span class="summary-label">Events</span></div>"#,
+        icon_rooms = "\u{1F3E0}",
+        icon_light = "\u{1F4A1}",
+        icon_sensor = "\u{1F321}\u{FE0F}",
+        icon_journal = "\u{1F4CB}",
+    )
+}
+
+pub(crate) fn sensors_rows_html(state: &CoreState) -> String {
+    let mut out = String::new();
+
+    if state.temperature_readings().is_empty() && state.contact_states().is_empty() {
+        return r#"<tr><td colspan="3" class="cell-empty"><em>No sensor data yet</em></td></tr>"#
+            .to_string();
+    }
+
+    for (sensor_id, millideg) in state.temperature_readings() {
+        let celsius = *millideg as f64 / 1000.0;
+        out.push_str(&format!(
+            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge badge-fact">{val:.1}{deg}C</span></td><td class="col-prov">temperature</td></tr>"#,
+            icon = "\u{1F321}\u{FE0F}",
+            id = esc_html(sensor_id),
+            val = celsius,
+            deg = "\u{00B0}",
+        ));
+    }
+
+    for (sensor_id, open) in state.contact_states() {
+        let (state_text, badge_class) = if *open {
+            ("Open", "badge-obs")
+        } else {
+            ("Closed", "badge-fact")
+        };
+        out.push_str(&format!(
+            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge {cls}">{st}</span></td><td class="col-prov">contact</td></tr>"#,
+            icon = "\u{1F6AA}",
+            id = esc_html(sensor_id),
+            cls = badge_class,
+            st = state_text,
+        ));
+    }
+
     out
 }
 
@@ -66,15 +112,68 @@ pub(crate) fn render_dashboard_page(
     journal_path_display: &str,
     lights_rows: &str,
     journal_rows: &str,
-    last_log: &str,
+    summary_cards: &str,
+    sensors_rows: &str,
 ) -> String {
     include_str!("dashboard.html")
         .replace("%%SECURITY_BANNER%%", security_banner)
         .replace("%%JOURNAL_PATH%%", journal_path_display)
         .replace("%%LIGHTS_ROWS%%", lights_rows)
         .replace("%%JOURNAL_ROWS%%", journal_rows)
-        .replace("%%LAST_LOG%%", last_log)
+        .replace("%%SUMMARY_CARDS%%", summary_cards)
+        .replace("%%SENSORS_ROWS%%", sensors_rows)
         .replace("%%JOURNAL_LIMIT%%", &DASHBOARD_JOURNAL_ROWS.to_string())
+}
+
+pub(crate) fn render_sensors_page(
+    security_banner: &str,
+    temp_rows: &str,
+    contact_rows: &str,
+) -> String {
+    include_str!("sensors.html")
+        .replace("%%SECURITY_BANNER%%", security_banner)
+        .replace("%%TEMPERATURE_ROWS%%", temp_rows)
+        .replace("%%CONTACT_ROWS%%", contact_rows)
+}
+
+pub(crate) fn temperature_rows_html(state: &CoreState) -> String {
+    if state.temperature_readings().is_empty() {
+        return r#"<tr><td colspan="2" class="cell-empty"><em>No temperature sensors yet</em></td></tr>"#.to_string();
+    }
+    let mut out = String::new();
+    for (sensor_id, millideg) in state.temperature_readings() {
+        let celsius = *millideg as f64 / 1000.0;
+        out.push_str(&format!(
+            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge badge-fact">{val:.1}{deg}C</span></td></tr>"#,
+            icon = "\u{1F321}\u{FE0F}",
+            id = esc_html(sensor_id),
+            val = celsius,
+            deg = "\u{00B0}",
+        ));
+    }
+    out
+}
+
+pub(crate) fn contact_rows_html(state: &CoreState) -> String {
+    if state.contact_states().is_empty() {
+        return r#"<tr><td colspan="2" class="cell-empty"><em>No contact sensors yet</em></td></tr>"#.to_string();
+    }
+    let mut out = String::new();
+    for (sensor_id, open) in state.contact_states() {
+        let (state_text, badge_class) = if *open {
+            ("Open", "badge-obs")
+        } else {
+            ("Closed", "badge-fact")
+        };
+        out.push_str(&format!(
+            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge {cls}">{st}</span></td></tr>"#,
+            icon = "\u{1F6AA}",
+            id = esc_html(sensor_id),
+            cls = badge_class,
+            st = state_text,
+        ));
+    }
+    out
 }
 
 fn kv_row_th(label: &str, value: &str) -> String {

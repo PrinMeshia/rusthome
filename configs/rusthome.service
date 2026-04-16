@@ -1,0 +1,29 @@
+[Unit]
+Description=rusthome all-in-one (embedded MQTT broker + ingest + web dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/projects/rusthome
+
+ExecStart=/home/pi/projects/rusthome/target/release/rusthome serve \
+    --data-dir /home/pi/projects/rusthome/data \
+    --bind 0.0.0.0:8080 \
+    --mqtt-port 1883
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rusthome
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/projects/rusthome/data
+
+[Install]
+WantedBy=multi-user.target

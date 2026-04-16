@@ -13,7 +13,8 @@ The FIFO engine does **not** read sensors or the network. A separate **adapter**
 | **Library** `rusthome_app::ingest_observation_with_causal` | Push `Observation` events (e.g. motion) with your own `causal_chain_id` |
 | **Library** `rusthome_app::ingest_command_with_causal` | Push `Command` lines (e.g. `TurnOffLight` from a switch adapter) with your own `causal_chain_id` |
 | **Library** `rusthome_app::rusthome_file` | Load / validate `{data-dir}/rusthome.toml` — same helpers as the CLI (`load_rusthome_file`, `resolve_rules_preset`, `build_runtime_config`, `build_run_limits`) |
-| Example [`mqtt_motion_ingest`](../crates/app/examples/mqtt_motion_ingest.rs) | MQTT subscriber → `ingest_observation_with_causal` (`MotionDetected`); `rumqttc` with `default-features = false` (plain TCP) |
+| **Library** `rusthome_app::mqtt_ingest` | MQTT topic → `ObservationEvent` dispatch (`MotionDetected`, `TemperatureReading`, `ContactChanged`); used by `rusthome serve` and the standalone adapter |
+| Example [`mqtt_motion_ingest`](../crates/app/examples/mqtt_motion_ingest.rs) | MQTT subscriber for external brokers → `dispatch_mqtt_publish`; `rumqttc` with `default-features = false` (plain TCP) |
 
 ## Example binaries (templates)
 
@@ -40,20 +41,81 @@ cargo run -p rusthome-app --example ingest_turn_off -- \
   --data-dir data --timestamp 200 --room hall
 ```
 
-### MQTT motion ([`mqtt_motion_ingest.rs`](../crates/app/examples/mqtt_motion_ingest.rs))
+### MQTT adapter ([`mqtt_motion_ingest.rs`](../crates/app/examples/mqtt_motion_ingest.rs))
+
+Standalone adapter for connecting to an **external** MQTT broker. Supports all observation types via the shared [`mqtt_ingest`](../crates/app/src/mqtt_ingest.rs) module (motion, temperature, contact).
 
 1. Same `rusthome.toml` loading and journal replay as the other examples
 2. Subscribes with **`rumqttc`** (TCP; optional `--mqtt-user` / `--mqtt-password`)
-3. Each publish → `ingest_observation_with_causal` with `ObservationEvent::MotionDetected` and a fresh `causal_chain_id` (UUID)
-
-Payload: plain UTF-8 room name, or JSON `{"room":"…"}`; optional `"ts"` for logical time (otherwise wall ms, strictly increasing vs the last ingested event). If JSON has no `room`, the last topic segment is used when it looks like a name.
+3. Each publish → `dispatch_mqtt_publish` which classifies the topic and ingests the appropriate observation
 
 ```bash
 cargo run -p rusthome-app --example mqtt_motion_ingest -- \
-  --data-dir data --broker 127.0.0.1 --port 1883 --topic 'sensors/motion/#'
+  --data-dir data --broker 127.0.0.1 --port 1883 --topic 'sensors/#'
 ```
 
+For most deployments, prefer `rusthome serve` (embedded broker) instead. This example is useful when connecting to a broker you already run externally.
+
 Extend these with your transport; keep **domain logic** in rules, **I/O** in the adapter.
+
+## All-in-one deployment (`rusthome serve`)
+
+`rusthome serve` runs **three components in a single process**:
+
+1. **Embedded MQTT broker** (`rumqttd`) listening on TCP `0.0.0.0:<mqtt-port>` (default 1883)
+2. **Ingest adapter** connected to the broker via an in-process link (zero-copy, no TCP loopback)
+3. **Web dashboard** (Axum) on `<bind>` (default `127.0.0.1:8080`)
+
+External sensors (Zigbee2MQTT, Tasmota, etc.) connect to the embedded broker over TCP. No external Mosquitto needed.
+
+### Supported MQTT topics
+
+| Pattern | Observation |
+|---|---|
+| `sensors/motion/{room}` | `MotionDetected` |
+| `sensors/temperature/{sensor_id}` | `TemperatureReading` |
+| `sensors/contact/{sensor_id}` | `ContactChanged` |
+
+Payload: plain UTF-8 entity name, or JSON (see [`mqtt_ingest`](../crates/app/src/mqtt_ingest.rs) for details).
+
+### CLI flags
+
+```text
+rusthome serve [OPTIONS]
+  --bind <ADDR>        Web dashboard bind address  [default: 127.0.0.1:8080]
+  --mqtt-port <PORT>   Embedded broker TCP port     [default: 1883]
+  --mqtt-topic <TOPIC> Ingest topic filter          [default: sensors/#]
+  --no-broker          Disable broker (web only, legacy mode)
+```
+
+### Running as a systemd service
+
+Unit file: [`configs/rusthome.service`](../configs/rusthome.service).
+
+```bash
+cargo build -p rusthome-cli --release
+
+sudo cp configs/rusthome.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now rusthome
+
+# Check status / logs
+systemctl status rusthome
+journalctl -u rusthome -f
+```
+
+Edit `ExecStart` in the unit file to adjust `--bind`, `--mqtt-port`, `--mqtt-topic`, or `--data-dir`.
+
+### Legacy: separate services (external broker)
+
+For setups using an **external** MQTT broker (e.g. Mosquitto), the split service files are still available:
+
+| File | Service |
+| ---- | ------- |
+| [`rusthome-mqtt.service`](../configs/rusthome-mqtt.service) | MQTT adapter (connects to external broker) |
+| [`rusthome-web.service`](../configs/rusthome-web.service) | Web dashboard only (`--no-broker` equivalent) |
+
+See the files for installation instructions.
 
 ## Config parity with CLI
 

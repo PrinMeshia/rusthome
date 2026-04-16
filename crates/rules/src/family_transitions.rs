@@ -13,7 +13,9 @@ pub enum Family {
 
 pub fn kind_family(k: EventKind) -> Family {
     match k {
-        EventKind::MotionDetected => Family::Observation,
+        EventKind::MotionDetected
+        | EventKind::TemperatureReading
+        | EventKind::ContactChanged => Family::Observation,
         EventKind::TurnOnLight | EventKind::TurnOffLight | EventKind::NotifyUser | EventKind::LogUsage => {
             Family::Command
         }
@@ -21,7 +23,9 @@ pub fn kind_family(k: EventKind) -> Family {
         | EventKind::LightOff
         | EventKind::UsageLogged
         | EventKind::CommandIo
-        | EventKind::StateCorrectedFromObservation => Family::Fact,
+        | EventKind::StateCorrectedFromObservation
+        | EventKind::TemperatureRecorded
+        | EventKind::ContactStateChanged => Family::Fact,
         EventKind::ErrorOccurred => Family::Error,
     }
 }

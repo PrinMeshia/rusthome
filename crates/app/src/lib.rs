@@ -3,6 +3,7 @@
 //! §14.1 — replay and live processing are **not idempotent**: the same fact replayed twice
 //! applies `apply_event` twice until dedup applies.
 
+pub mod mqtt_ingest;
 mod pipeline;
 mod reconciliation;
 pub mod rusthome_file;

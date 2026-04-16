@@ -44,4 +44,35 @@ Record `elapsed_ms` on the target (e.g. Raspberry Pi) and update this file with 
 
 `elapsed_ms / count` is a **coarse average**: each bench iteration replays the **entire** journal so far, so later iterations cost more — comparing `count=50` vs `count=200` on the same machine is not linear in `count`.
 
-Copy with **exact machine model**, date, and `git` revision for each row. Spread between rows is normal (CPU model, thermals, `debug` vs `--release`, background load). **p95** under real load still needs `scripts/bench-p95.sh` (multiple runs).
+Copy with **exact machine model**, date, and `git` revision for each row. Spread between rows is normal (CPU model, thermals, `debug` vs `--release`, background load).
+
+## p95 measurement (`bench-p95.sh`)
+
+Raspberry Pi 4 Model B Rev 1.4 (`aarch64`), release build, `20ba72a`, 2026-04-15.
+
+| Bench | Runs | Min | Median | p95 | Max | Per ingest (coarse avg) |
+|-------|------|-----|--------|-----|-----|-------------------------|
+| `count=50` | 10 | 128 ms | 132 ms | **180 ms** | 180 ms | ~2.6 ms |
+| `count=200` | 10 | 3001 ms | 3032 ms | **3140 ms** | 3140 ms | ~15.2 ms |
+
+The p95 for `count=200` (3140 ms) is well within the `max_wall_ms_per_run` default (30 000 ms). The per-ingest cost grows with journal size because each bench iteration replays the full journal before appending; this is expected and does not reflect steady-state single-event latency.
+
+**Conclusion**: at `count=200` on a Pi 4, the benchmark p95 stays under 4 s, roughly 10× below the default budget. No adjustment to `RunLimits::max_wall_ms_per_run` is needed for this workload.
+
+## MQTT end-to-end p95 (`mqtt-p95.sh`)
+
+Raspberry Pi 4 Model B Rev 1.4 (`aarch64`), release build, Mosquitto 2.0 local broker, 2026-04-15.
+
+Each run: fresh journal, fresh adapter process, 20 distinct-room `MotionDetected` events published via `mosquitto_pub`. Measures wall-clock from first publish to last journal line committed.
+
+```bash
+bash scripts/mqtt-p95.sh 10 20
+```
+
+| Runs | Events/run | Min | Median | p95 | Max | Per event (median) | Per event (p95) |
+|------|-----------|-----|--------|-----|-----|--------------------|-----------------|
+| 10 | 20 | 145 ms | 147 ms | **214 ms** | 214 ms | ~7 ms | ~10 ms |
+
+At ~7 ms per event (median), the adapter sustains **~140 events/s** — well above the peak hypothesis (20 events/s). The p95 per-event latency (10 ms) stays 3 orders of magnitude below `max_wall_ms_per_run`.
+
+The MQTT path adds minimal overhead vs the synthetic bench: the per-event cost is comparable to `bench --count 50` on the same hardware, confirming that network transport (local Mosquitto) is not a bottleneck.

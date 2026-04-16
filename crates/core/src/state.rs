@@ -25,6 +25,12 @@ pub struct State {
     pub(crate) command_io_trackers: BTreeMap<String, CommandIoTracker>,
     /// Last log usage item (demo). Mutate only via `apply_event`.
     pub(crate) last_log: Option<String>,
+    /// Sensor id → last temperature in millidegrees Celsius.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) temperatures: BTreeMap<String, i32>,
+    /// Sensor id → contact is open (true = open, false = closed).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) contacts: BTreeMap<String, bool>,
 }
 
 impl StateView for State {
@@ -34,6 +40,14 @@ impl StateView for State {
 
     fn last_log_item(&self) -> Option<&str> {
         self.last_log.as_deref()
+    }
+
+    fn temperature(&self, sensor_id: &str) -> Option<i32> {
+        self.temperatures.get(sensor_id).copied()
+    }
+
+    fn contact_open(&self, sensor_id: &str) -> Option<bool> {
+        self.contacts.get(sensor_id).copied()
     }
 }
 
@@ -59,5 +73,15 @@ impl State {
                 )
             })
             .collect()
+    }
+
+    /// All temperature readings (sensor_id → millidegrees Celsius) in deterministic order.
+    pub fn temperature_readings(&self) -> &BTreeMap<String, i32> {
+        &self.temperatures
+    }
+
+    /// All contact sensor states (sensor_id → open) in deterministic order.
+    pub fn contact_states(&self) -> &BTreeMap<String, bool> {
+        &self.contacts
     }
 }

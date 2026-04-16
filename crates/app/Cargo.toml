@@ -10,14 +10,15 @@ rusthome-core = { path = "../core" }
 rusthome-rules = { path = "../rules" }
 rusthome-infra = { path = "../infra" }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+rumqttc = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 serde_json = { workspace = true }
 proptest = { workspace = true }
 clap = { workspace = true }
-rumqttc = { version = "0.25", default-features = false }

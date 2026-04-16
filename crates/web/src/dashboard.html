@@ -19,6 +19,14 @@
       --off-bg: #30363d44;
       --err-bg: #f8514918;
       --err-border: #f8514966;
+      --fact: #58a6ff;
+      --fact-bg: #388bfd26;
+      --cmd: #d29922;
+      --cmd-bg: #d2992226;
+      --obs: #3fb950;
+      --obs-bg: #23863626;
+      --error: #f85149;
+      --error-bg: #f8514926;
     }
     @media (prefers-color-scheme: light) {
       :root {
@@ -35,6 +43,14 @@
         --off-bg: #f6f8fa;
         --err-bg: #ffebe9;
         --err-border: #ff818266;
+        --fact: #0969da;
+        --fact-bg: #ddf4ff;
+        --cmd: #9a6700;
+        --cmd-bg: #fff8c5;
+        --obs: #1a7f37;
+        --obs-bg: #dafbe1;
+        --error: #cf222e;
+        --error-bg: #ffebe9;
       }
     }
     * { box-sizing: border-box; }
@@ -46,7 +62,7 @@
       line-height: 1.5;
       min-height: 100vh;
     }
-    .wrap { max-width: 64rem; margin: 0 auto; padding: 1.25rem 1.25rem 2rem; }
+    .wrap { max-width: 72rem; margin: 0 auto; padding: 1.25rem 1.25rem 2rem; }
     header {
       display: flex;
       flex-wrap: wrap;
@@ -56,6 +72,9 @@
     }
     header h1 { font-size: 1.35rem; font-weight: 650; letter-spacing: -0.02em; margin: 0; }
     .tagline { color: var(--muted); font-size: 0.9rem; }
+    nav.links { margin: 0.35rem 0 0; font-size: 0.875rem; }
+    nav.links a { color: var(--link); text-decoration: none; margin-right: 1rem; }
+    nav.links a:hover { text-decoration: underline; }
     .toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -106,11 +125,32 @@
         background: #fbefff;
       }
     }
-    nav.links { margin: 0.35rem 0 0; font-size: 0.875rem; }
-    nav.links a { color: var(--link); text-decoration: none; margin-right: 1rem; }
-    nav.links a:hover { text-decoration: underline; }
     .meta-path { font-size: 0.82rem; color: var(--muted); margin: 0.25rem 0 0; word-break: break-all; }
     .meta-path code { font-size: 0.8em; color: var(--text); }
+
+    /* Summary cards */
+    .summary-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .summary-card {
+      flex: 1 1 7rem;
+      min-width: 7rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+    }
+    .summary-icon { font-size: 1.5rem; line-height: 1; }
+    .summary-value { font-size: 1.4rem; font-weight: 700; line-height: 1.2; }
+    .summary-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+
     .grid {
       display: grid;
       gap: 1rem;
@@ -152,10 +192,13 @@
     }
     .badge.on { color: var(--on); background: var(--on-bg); }
     .badge.off { color: var(--off); background: var(--off-bg); }
+    .badge-fact { color: var(--fact); background: var(--fact-bg); text-transform: none; }
+    .badge-command { color: var(--cmd); background: var(--cmd-bg); text-transform: none; }
+    .badge-observation { color: var(--obs); background: var(--obs-bg); text-transform: none; }
+    .badge-error { color: var(--error); background: var(--error-bg); text-transform: none; }
     .journal-scroll { max-height: min(52vh, 28rem); overflow: auto; margin: 0 -0.25rem; padding: 0 0.25rem; }
     .mono { font-family: ui-monospace, "Cascadia Code", "Source Code Pro", monospace; font-size: 0.82rem; }
-    .data td.kind { word-break: break-all; }
-    .usage { margin: 0; font-size: 0.92rem; }
+    .left-stack { display: flex; flex-direction: column; gap: 1rem; }
     @media (prefers-reduced-motion: reduce) {
       button:active { transform: none; }
     }
@@ -167,11 +210,12 @@
     <div id="error-bar" role="alert"></div>
     <header>
       <h1>rusthome</h1>
-      <span class="tagline">read-only projection</span>
+      <span class="tagline">home automation</span>
     </header>
     <p class="meta-path">Journal: <code>%%JOURNAL_PATH%%</code></p>
     <nav class="links">
       <span class="current" style="color:var(--muted);margin-right:1rem;">Dashboard</span>
+      <a href="/sensors">Sensors</a>
       <a href="/system">System</a>
       <a href="/api/state">JSON state</a>
       <a href="/api/journal?limit=40">JSON journal</a>
@@ -182,28 +226,34 @@
       <label><input type="checkbox" id="auto-refresh" checked> Auto-refresh (4s)</label>
       <span id="updated-at"></span>
     </div>
+    <div class="summary-bar" id="summary-bar">%%SUMMARY_CARDS%%</div>
     <div class="grid">
-      <section class="card">
-        <h2>Lights</h2>
-        <table class="data">
-          <thead><tr><th>Room</th><th>State</th><th>Provenance</th></tr></thead>
-          <tbody id="lights-body">%%LIGHTS_ROWS%%</tbody>
-        </table>
-      </section>
+      <div class="left-stack">
+        <section class="card">
+          <h2>Lights</h2>
+          <table class="data">
+            <thead><tr><th>Room</th><th>State</th><th>Provenance</th></tr></thead>
+            <tbody id="lights-body">%%LIGHTS_ROWS%%</tbody>
+          </table>
+        </section>
+        <section class="card">
+          <h2>Sensors</h2>
+          <table class="data">
+            <thead><tr><th>Sensor</th><th>Value</th><th>Type</th></tr></thead>
+            <tbody id="sensors-body">%%SENSORS_ROWS%%</tbody>
+          </table>
+        </section>
+      </div>
       <section class="card">
         <h2>Recent journal (newest first)</h2>
         <div class="journal-scroll">
           <table class="data">
-            <thead><tr><th>Seq</th><th>Time</th><th>Kind</th></tr></thead>
+            <thead><tr><th>Seq</th><th>Time</th><th>Detail</th></tr></thead>
             <tbody id="journal-body">%%JOURNAL_ROWS%%</tbody>
           </table>
         </div>
       </section>
     </div>
-    <section class="card" style="margin-top:1rem;">
-      <h2>Usage log (demo)</h2>
-      <p class="usage" id="last-log">%%LAST_LOG%%</p>
-    </section>
   </div>
   <script>
 (function () {
@@ -213,9 +263,13 @@
   const journalLimit = %%JOURNAL_LIMIT%%;
 
   function provLabel(v) {
-    if (!v) return '—';
+    if (!v) return '\u2014';
     if (typeof v === 'string') return v.charAt(0).toUpperCase() + v.slice(1);
     return String(v);
+  }
+
+  function fmtCelsius(millideg) {
+    return (millideg / 1000).toFixed(1) + '\u00B0C';
   }
 
   function renderState(st) {
@@ -254,15 +308,83 @@
       tbody.appendChild(tr);
     }
 
-    const logEl = $('last-log');
-    logEl.replaceChildren();
-    if (st.last_log) {
-      logEl.textContent = st.last_log;
-    } else {
+    renderSensors(st);
+    renderSummary(st);
+  }
+
+  function renderSensors(st) {
+    const tbody = $('sensors-body');
+    tbody.replaceChildren();
+    const temps = st.temperatures || {};
+    const contacts = st.contacts || {};
+    const tempKeys = Object.keys(temps).sort();
+    const contactKeys = Object.keys(contacts).sort();
+
+    if (tempKeys.length === 0 && contactKeys.length === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 3;
+      td.className = 'cell-empty';
       const em = document.createElement('em');
-      em.textContent = 'none';
-      logEl.appendChild(em);
+      em.textContent = 'No sensor data yet';
+      td.appendChild(em);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
     }
+
+    for (const id of tempKeys) {
+      const tr = document.createElement('tr');
+      const tdName = document.createElement('td');
+      tdName.className = 'col-room';
+      tdName.textContent = '\uD83C\uDF21\uFE0F ' + id;
+      const tdVal = document.createElement('td');
+      const b = document.createElement('span');
+      b.className = 'badge badge-fact';
+      b.textContent = fmtCelsius(temps[id]);
+      tdVal.appendChild(b);
+      const tdType = document.createElement('td');
+      tdType.className = 'col-prov';
+      tdType.textContent = 'temperature';
+      tr.appendChild(tdName);
+      tr.appendChild(tdVal);
+      tr.appendChild(tdType);
+      tbody.appendChild(tr);
+    }
+
+    for (const id of contactKeys) {
+      const tr = document.createElement('tr');
+      const tdName = document.createElement('td');
+      tdName.className = 'col-room';
+      tdName.textContent = '\uD83D\uDEAA ' + id;
+      const tdVal = document.createElement('td');
+      const b = document.createElement('span');
+      const isOpen = !!contacts[id];
+      b.className = 'badge ' + (isOpen ? 'badge-obs' : 'badge-fact');
+      b.textContent = isOpen ? 'Open' : 'Closed';
+      tdVal.appendChild(b);
+      const tdType = document.createElement('td');
+      tdType.className = 'col-prov';
+      tdType.textContent = 'contact';
+      tr.appendChild(tdName);
+      tr.appendChild(tdVal);
+      tr.appendChild(tdType);
+      tbody.appendChild(tr);
+    }
+  }
+
+  function renderSummary(st) {
+    const lights = st.lights || {};
+    const rooms = Object.keys(lights);
+    const lightsOn = rooms.filter(r => !!lights[r]).length;
+    const temps = st.temperatures || {};
+    const contacts = st.contacts || {};
+    const sensorCount = Object.keys(temps).length + Object.keys(contacts).length;
+    $('summary-bar').innerHTML =
+      '<div class="summary-card"><span class="summary-icon">\uD83C\uDFE0</span><span class="summary-value">' + rooms.length + '</span><span class="summary-label">Rooms</span></div>' +
+      '<div class="summary-card"><span class="summary-icon">\uD83D\uDCA1</span><span class="summary-value">' + lightsOn + '/' + rooms.length + '</span><span class="summary-label">Lights On</span></div>' +
+      '<div class="summary-card"><span class="summary-icon">\uD83C\uDF21\uFE0F</span><span class="summary-value">' + sensorCount + '</span><span class="summary-label">Sensors</span></div>' +
+      '<div class="summary-card" id="summary-events"><span class="summary-icon">\uD83D\uDCCB</span><span class="summary-value">-</span><span class="summary-label">Events</span></div>';
   }
 
   function renderJournal(lines) {
@@ -280,15 +402,25 @@
       tbody.appendChild(tr);
       return;
     }
+    const eventsCard = document.querySelector('#summary-events .summary-value');
+    if (eventsCard) eventsCard.textContent = String(lines[lines.length - 1].sequence + 1);
     for (let i = lines.length - 1; i >= 0; i--) {
       const row = lines[i];
       const tr = document.createElement('tr');
-      for (const text of [String(row.sequence), String(row.timestamp), String(row.kind)]) {
-        const td = document.createElement('td');
-        td.className = 'mono' + (text === String(row.kind) ? ' kind' : '');
-        td.textContent = text;
-        tr.appendChild(td);
-      }
+      const tdSeq = document.createElement('td');
+      tdSeq.className = 'mono';
+      tdSeq.textContent = String(row.sequence);
+      const tdTs = document.createElement('td');
+      tdTs.className = 'mono';
+      tdTs.textContent = String(row.timestamp);
+      const tdDetail = document.createElement('td');
+      const b = document.createElement('span');
+      b.className = 'badge badge-' + (row.family || 'fact');
+      b.textContent = row.detail || row.kind;
+      tdDetail.appendChild(b);
+      tr.appendChild(tdSeq);
+      tr.appendChild(tdTs);
+      tr.appendChild(tdDetail);
       tbody.appendChild(tr);
     }
   }
