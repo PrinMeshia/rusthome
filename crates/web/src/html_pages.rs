@@ -71,6 +71,8 @@ pub(crate) fn dev_footer_system() -> String {
     dev_footer_inner(&[
         ("/api/system", "Système JSON"),
         ("/api/bluetooth", "Bluetooth JSON"),
+        ("/api/bluetooth/device?addr=…&scan=10", "Présence MAC + scan opt."),
+        ("/api/bluetooth/info?addr=…", "Infos bluetoothctl"),
         ("/api/health", "Santé"),
     ])
 }
@@ -469,9 +471,10 @@ pub(crate) fn bluetooth_rows_html(s: &bluetooth_info::BluetoothSnapshot) -> Stri
                 });
             }
             rows.push_str(&format!(
-                r#"<tr><th class="mono">{}</th><td>{}</td></tr>"#,
-                esc_html(&d.address),
-                esc_html(&td),
+                r#"<tr><th class="mono">{addr}</th><td><span class="bt-device-summary">{td}</span> <button type="button" class="bt-device-info" data-address="{addr_attr}" aria-label="Détails Bluetooth {addr_attr}">Détails</button></td></tr>"#,
+                addr = esc_html(&d.address),
+                td = esc_html(&td),
+                addr_attr = esc_html(&d.address),
             ));
         }
     }

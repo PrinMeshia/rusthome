@@ -91,6 +91,8 @@ pub async fn run(
         .route("/api/command", post(api_command))
         .route("/api/system", get(api_system))
         .route("/api/bluetooth", get(api_bluetooth))
+        .route("/api/bluetooth/device", get(api_bluetooth_device))
+        .route("/api/bluetooth/info", get(api_bluetooth_info))
         .route("/api/health", get(api_health))
         .with_state(state);
 
@@ -379,6 +381,58 @@ async fn api_bluetooth() -> impl IntoResponse {
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "bluetooth snapshot task failed",
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct BluetoothDeviceQuery {
+    /// MAC as typed by the user (normalized server-side).
+    addr: String,
+    /// Optional discovery duration in seconds (5–45). Runs `bluetoothctl scan on` before listing devices.
+    #[serde(default)]
+    scan: Option<u32>,
+}
+
+#[derive(Deserialize)]
+struct BluetoothAddrOnlyQuery {
+    addr: String,
+}
+
+async fn api_bluetooth_info(Query(q): Query<BluetoothAddrOnlyQuery>) -> impl IntoResponse {
+    if q.addr.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            "Paramètre requis : addr (adresse MAC).\n",
+        )
+            .into_response();
+    }
+    match tokio::task::spawn_blocking(move || bluetooth_info::device_info(&q.addr)).await {
+        Ok(info) => Json(info).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "bluetooth info task failed",
+        )
+            .into_response(),
+    }
+}
+
+async fn api_bluetooth_device(Query(q): Query<BluetoothDeviceQuery>) -> impl IntoResponse {
+    if q.addr.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            "Paramètre requis : addr (adresse MAC).\n",
+        )
+            .into_response();
+    }
+    match tokio::task::spawn_blocking(move || bluetooth_info::lookup_device(&q.addr, q.scan)).await {
+        Ok(lookup) => Json(lookup).into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "bluetooth device lookup failed",
         )
             .into_response(),
     }

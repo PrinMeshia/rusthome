@@ -22,4 +22,14 @@ With **`rusthome serve`** and the **embedded MQTT broker**, each successful MQTT
 
 This path is **not** available for standalone **`rusthome-web`** or **`rusthome serve --no-broker`** (no in-process ingest). External writes to the journal (e.g. another `rusthome emit` process) are not pushed until the next poll or page reload.
 
+## Bluetooth MAC presence (lab)
+
+**`GET /api/bluetooth/device?addr=…`** returns JSON describing whether a normalized MAC appears in BlueZ’s device list (`bluetoothctl devices`), plus paired/connected when available.
+
+**`&scan=SECONDS`** (optional, **5–45**): runs a short **`bluetoothctl scan on`** first (same idea as a Jeedom-style BLE discovery) so devices **in range** can show up **without** being paired first. Without `scan`, only the current daemon cache is queried (fast). Randomised BLE addresses (many phones) or permission issues can still make a device invisible.
+
+The **Système** page exposes both modes; periodic auto-refresh only reflects the table snapshot (no scan on each poll).
+
+**`GET /api/bluetooth/info?addr=…`** returns structured fields parsed from **`bluetoothctl info <MAC>`** (name, alias, class, icon, paired/connected, RSSI when available, UUID list, battery hint, etc.). The **Détails** button next to each known device loads this into a panel. Availability depends on BlueZ; some fields appear only when the device is connected or exposes them.
+
 Rust sources stay under **`src/`** only.

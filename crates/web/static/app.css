@@ -641,6 +641,129 @@ th.subhdr {
   line-height: 1.4;
 }
 .bluetooth-card { margin-top: var(--space-lg); }
+
+.bt-device-summary { margin-right: var(--space-sm); }
+.bt-device-info {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--link);
+  cursor: pointer;
+}
+.bt-device-info:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.bt-detail-panel {
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.bt-detail-title {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-section);
+  font-weight: 600;
+  color: var(--text);
+}
+.bt-detail-src {
+  margin: 0 0 var(--space-md);
+  font-size: 0.82rem;
+}
+.bt-detail-src code { font-size: 0.9em; }
+.bt-detail-foot { margin-top: var(--space-md); font-size: 0.82rem; }
+.bt-detail-inner th { width: 11rem; vertical-align: top; }
+.uuid-cell {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.bt-mac-lookup {
+  margin-bottom: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.bt-mac-label {
+  display: block;
+  font-size: var(--text-small);
+  color: var(--muted);
+  margin-bottom: var(--space-sm);
+}
+.bt-mac-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+.bt-mac-input {
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  max-width: 22rem;
+  font: inherit;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.bt-mac-input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.bt-mac-btn {
+  font: inherit;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.bt-mac-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.bt-scan-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.bt-scan-label {
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+.bt-scan-row .pref-select {
+  flex: 1 1 14rem;
+  max-width: min(100%, 28rem);
+}
+.bt-mac-hint-small {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: var(--space-sm) 0 0;
+  max-width: 48rem;
+  line-height: 1.35;
+}
+.bt-mac-hint-small code {
+  font-size: 0.85em;
+}
+.bt-mac-result {
+  margin-top: var(--space-md);
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+.bt-mac-result .badge {
+  margin-right: var(--space-xs);
+  vertical-align: middle;
+}
 .meter-wrap {
   height: 8px;
   background: var(--border);

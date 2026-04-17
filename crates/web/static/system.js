@@ -5,6 +5,7 @@
   const updatedEl = $('updated-at');
   let timer = null;
   let consecutiveFails = 0;
+  let lastBtSnapshot = null;
 
   function fmtBytes(n) {
     const GB = 1024 * 1024 * 1024, MB = 1024 * 1024;
@@ -98,6 +99,110 @@
     return '\u2014';
   }
 
+  function normalizeMacClient(raw) {
+    if (!raw || typeof raw !== 'string') return null;
+    var s = raw.trim().replace(/-/g, ':').replace(/\s+/g, '');
+    if (s.indexOf(':') < 0 && /^[0-9A-Fa-f]{12}$/.test(s)) {
+      s = s.match(/.{1,2}/g).join(':').toUpperCase();
+    } else {
+      s = s.toUpperCase();
+    }
+    if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(s)) return null;
+    return s;
+  }
+
+  function syncBtPresenceFromSnapshot(bt) {
+    var input = $('bt-mac-input');
+    var el = $('bt-mac-result');
+    if (!input || !el) return;
+    var raw = input.value.trim();
+    if (!raw) {
+      el.innerHTML = '';
+      return;
+    }
+    var norm = normalizeMacClient(raw);
+    if (!norm) {
+      el.innerHTML = '<span class="badge badge-error">MAC invalide</span>';
+      return;
+    }
+    if (!bt || !bt.devices) return;
+    var dev = null;
+    for (var i = 0; i < bt.devices.length; i++) {
+      if (bt.devices[i].address && bt.devices[i].address.toUpperCase() === norm) {
+        dev = bt.devices[i];
+        break;
+      }
+    }
+    if (dev) {
+      var name = dev.name ? esc(dev.name) : '\u2014';
+      var p = typeof dev.paired === 'boolean' ? (dev.paired ? 'oui' : 'non') : '\u2014';
+      var c = typeof dev.connected === 'boolean' ? (dev.connected ? 'oui' : 'non') : '\u2014';
+      el.innerHTML = '<span class="badge on">Vu dans la liste BlueZ</span> <strong class="mono">' + esc(norm) + '</strong> \u00B7 ' + name +
+        ' \u00B7 appair\u00E9 : ' + p + ' \u00B7 connect\u00E9 : ' + c;
+    } else {
+      el.innerHTML = '<span class="badge off">Absent de la liste</span> <span class="mono">' + esc(norm) +
+        '</span> <span class="cell-muted">\u2014 appairez l\u2019appareil ou attendez qu\u2019il apparaisse dans BlueZ.</span>';
+    }
+  }
+
+  function renderLookupApi(lookup) {
+    var el = $('bt-mac-result');
+    if (!el) return;
+    var scanLine = '';
+    if (lookup.scan_performed && lookup.scan_seconds) {
+      scanLine = '<span class="cell-muted">D\u00E9couverte BLE \u2248' + lookup.scan_seconds + ' s. </span>';
+    }
+    if (!lookup.platform_supported) {
+      el.innerHTML = scanLine + '<span class="cell-muted">' + esc(lookup.note || 'Plateforme non prise en charge.') + '</span>';
+      return;
+    }
+    if (!lookup.valid_format) {
+      el.innerHTML = scanLine + '<span class="badge badge-error">MAC invalide</span> ' + esc(lookup.note || '');
+      return;
+    }
+    if (lookup.in_known_devices) {
+      var name = lookup.name ? esc(lookup.name) : '\u2014';
+      var p = lookup.paired === true ? 'oui' : lookup.paired === false ? 'non' : '\u2014';
+      var c = lookup.connected === true ? 'oui' : lookup.connected === false ? 'non' : '\u2014';
+      el.innerHTML = scanLine + '<span class="badge on">Vu dans la liste BlueZ</span> <strong class="mono">' + esc(lookup.mac_normalized) + '</strong> \u00B7 ' + name +
+        ' \u00B7 appair\u00E9 : ' + p + ' \u00B7 connect\u00E9 : ' + c;
+    } else {
+      el.innerHTML = scanLine + '<span class="badge off">Absent de la liste</span> <span class="mono">' + esc(lookup.mac_normalized) + '</span> \u00B7 ' +
+        (lookup.note ? '<span class="cell-muted">' + esc(lookup.note) + '</span>' : '');
+    }
+  }
+
+  async function checkBtMacApi() {
+    var input = $('bt-mac-input');
+    var el = $('bt-mac-result');
+    var scanSel = $('bt-scan-sec');
+    if (!input || !el) return;
+    var raw = input.value.trim();
+    if (!raw) {
+      el.textContent = 'Saisissez une adresse MAC.';
+      return;
+    }
+    var scanSec = scanSel ? parseInt(scanSel.value, 10) : 0;
+    if (isNaN(scanSec) || scanSec < 0) scanSec = 0;
+    var waitMsg = scanSec >= 5
+      ? 'D\u00E9couverte BLE + v\u00E9rification (\u2248' + scanSec + ' s)\u2026'
+      : 'V\u00E9rification\u2026';
+    el.innerHTML = '<span class="cell-muted">' + waitMsg + '</span>';
+    try {
+      var qs = '/api/bluetooth/device?addr=' + encodeURIComponent(raw);
+      if (scanSec >= 5) qs += '&scan=' + scanSec;
+      var res = await fetch(qs);
+      var text = await res.text();
+      if (!res.ok) {
+        el.textContent = text;
+        return;
+      }
+      renderLookupApi(JSON.parse(text));
+    } catch (e) {
+      el.textContent = 'Erreur : ' + (e && e.message ? e.message : e);
+    }
+  }
+
   function renderBluetooth(bt) {
     let html = '';
     if (bt.notes && bt.notes.length) {
@@ -129,10 +234,72 @@
         if (typeof d.connected === 'boolean') {
           td += d.connected ? ' \u00B7 connect\u00E9 : oui' : ' \u00B7 connect\u00E9 : non';
         }
-        html += '<tr><th class="mono">' + esc(d.address) + '</th><td>' + esc(td) + '</td></tr>';
+        var rawAddr = d.address || '';
+        var addrAttr = String(rawAddr).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        html += '<tr><th class="mono">' + esc(rawAddr) + '</th><td><span class="bt-device-summary">' + esc(td) +
+          '</span> <button type="button" class="bt-device-info" data-address="' + addrAttr +
+          '" aria-label="D\u00E9tails Bluetooth ' + esc(rawAddr) + '">D\u00E9tails</button></td></tr>';
       }
     }
     $('tbody-bluetooth').innerHTML = html;
+  }
+
+  function renderBtInfoPanel(j) {
+    var panel = $('bt-detail-panel');
+    if (!panel) return;
+    panel.hidden = false;
+    if (!j.platform_supported) {
+      panel.innerHTML = '<p class="cell-muted">' + esc(j.error || 'Non disponible sur cette plateforme.') + '</p>';
+      return;
+    }
+    if (j.error) {
+      panel.innerHTML = '<p class="cell-muted">' + esc(j.error) + '</p><p class="bt-detail-foot cell-muted">Souvent : l\u2019appareil n\u2019est pas encore dans le cache BlueZ ou la MAC est incorrecte.</p>';
+      return;
+    }
+    function row(label, val) {
+      if (val === undefined || val === null || val === '') return '';
+      return '<tr><th>' + esc(label) + '</th><td>' + esc(String(val)) + '</td></tr>';
+    }
+    var body = '';
+    body += row('Nom', j.name);
+    body += row('Alias', j.alias);
+    body += row('Classe', j.device_class);
+    body += row('Ic\u00F4ne', j.icon);
+    body += row('Appair\u00E9', j.paired === true ? 'oui' : j.paired === false ? 'non' : null);
+    body += row('Li\u00E9 (bonded)', j.bonded === true ? 'oui' : j.bonded === false ? 'non' : null);
+    body += row('Fiable (trusted)', j.trusted === true ? 'oui' : j.trusted === false ? 'non' : null);
+    body += row('Bloqu\u00E9', j.blocked === true ? 'oui' : j.blocked === false ? 'non' : null);
+    body += row('Connect\u00E9', j.connected === true ? 'oui' : j.connected === false ? 'non' : null);
+    body += row('RSSI', j.rssi != null ? j.rssi + ' dBm' : null);
+    body += row('Batterie %', j.battery_percentage != null ? j.battery_percentage : null);
+    body += row('ManufacturerData', j.manufacturer_data);
+    body += row('Modalias', j.modalias);
+    if (j.uuids && j.uuids.length) {
+      body += '<tr><th>UUID</th><td class="mono uuid-cell">' + j.uuids.map(function (u) { return esc(u); }).join('<br>') + '</td></tr>';
+    }
+    var title = j.mac_normalized ? esc(j.mac_normalized) : '';
+    panel.innerHTML = '<h3 class="bt-detail-title">D\u00E9tails BlueZ <span class="mono">' + title + '</span></h3>' +
+      '<p class="bt-detail-src cell-muted">Source : <code>bluetoothctl info</code></p>' +
+      '<div class="table-scroll-wrap"><table class="data bt-detail-inner"><tbody>' + body + '</tbody></table></div>';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function loadBtDeviceInfo(addr) {
+    var panel = $('bt-detail-panel');
+    if (!panel) return;
+    panel.hidden = false;
+    panel.innerHTML = '<p class="cell-muted">Chargement des d\u00E9tails\u2026</p>';
+    try {
+      var res = await fetch('/api/bluetooth/info?addr=' + encodeURIComponent(addr));
+      var text = await res.text();
+      if (!res.ok) {
+        panel.innerHTML = '<p class="cell-muted">' + esc(text) + '</p>';
+        return;
+      }
+      renderBtInfoPanel(JSON.parse(text));
+    } catch (e) {
+      panel.innerHTML = '<p class="cell-muted">Erreur : ' + esc(e && e.message ? e.message : String(e)) + '</p>';
+    }
   }
 
   async function refresh() {
@@ -150,12 +317,17 @@
       const btText = await btRes.text();
       if (btRes.ok) {
         try {
-          renderBluetooth(JSON.parse(btText));
+          var bt = JSON.parse(btText);
+          lastBtSnapshot = bt;
+          renderBluetooth(bt);
+          syncBtPresenceFromSnapshot(bt);
         } catch (_) {
+          lastBtSnapshot = null;
           $('tbody-bluetooth').innerHTML = '<tr><td colspan="2" class="cell-empty">' +
             esc('JSON invalide depuis /api/bluetooth') + '</td></tr>';
         }
       } else {
+        lastBtSnapshot = null;
         $('tbody-bluetooth').innerHTML = '<tr><td colspan="2" class="cell-empty">' +
           esc('API Bluetooth : ' + btText) + '</td></tr>';
       }
@@ -190,7 +362,27 @@
   }
 
   $('btn-refresh').addEventListener('click', () => refresh());
+  var btnBt = $('bt-mac-check');
+  if (btnBt) btnBt.addEventListener('click', () => checkBtMacApi());
+  var inpBt = $('bt-mac-input');
+  if (inpBt) {
+    inpBt.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        checkBtMacApi();
+      }
+    });
+  }
   window.addEventListener('rh-refresh-interval-changed', schedule);
+  var tbodyBt = $('tbody-bluetooth');
+  if (tbodyBt) {
+    tbodyBt.addEventListener('click', function (e) {
+      var btn = e.target.closest('.bt-device-info');
+      if (!btn) return;
+      var addr = btn.getAttribute('data-address');
+      if (addr) loadBtDeviceInfo(addr);
+    });
+  }
   schedule();
   refresh();
 })();

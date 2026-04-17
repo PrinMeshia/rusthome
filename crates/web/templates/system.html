@@ -72,11 +72,30 @@
       <section class="card wide bluetooth-card">
         <h2>Bluetooth</h2>
         <p class="bt-hint">Lecture seule : adaptateurs (<code>/sys/class/bluetooth</code>, <code>bluetoothctl show</code>) et appareils connus (<code>bluetoothctl devices</code>, avec Appairé / Connecté quand c’est disponible). Pas de scan, pas d’appairage, pas de BLE GATT — utilisez BlueZ ou une intégration future.</p>
-        <div class="table-scroll-wrap">
-          <table class="data">
-            <tbody id="tbody-bluetooth">%%BLUETOOTH_ROWS%%</tbody>
-          </table>
+        <div class="bt-mac-lookup" id="bt-mac-lookup">
+          <label class="bt-mac-label" for="bt-mac-input">Vérifier une adresse MAC (présence à portée / liste BlueZ)</label>
+          <div class="bt-mac-row">
+            <input type="text" id="bt-mac-input" class="mono bt-mac-input" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off" spellcheck="false" inputmode="text" aria-describedby="bt-mac-hint">
+            <button type="button" id="bt-mac-check" class="bt-mac-btn">Vérifier</button>
+          </div>
+          <div class="bt-scan-row">
+            <label class="bt-scan-label" for="bt-scan-sec">Avant la vérification</label>
+            <select id="bt-scan-sec" class="pref-select" aria-label="Découverte BLE avant vérification">
+              <option value="0" selected>Liste BlueZ seule (rapide, appareils déjà connus du daemon)</option>
+              <option value="10">Découverte BLE ~10 s (type Jeedom — repère souvent sans appairage)</option>
+              <option value="15">Découverte ~15 s</option>
+              <option value="25">Découverte ~25 s</option>
+            </select>
+          </div>
+          <p id="bt-mac-hint" class="bt-mac-hint-small">Sans découverte : même source que le tableau (appareils déjà vus par BlueZ). Avec découverte : <code>bluetoothctl scan on</code> quelques secondes pour voir des appareils à portée sans les appairer — peut échouer selon droits, randomisation d’adresse (téléphone), ou BLE désactivé.</p>
+          <div id="bt-mac-result" class="bt-mac-result" role="status" aria-live="polite"></div>
         </div>
+          <div class="table-scroll-wrap">
+            <table class="data">
+              <tbody id="tbody-bluetooth">%%BLUETOOTH_ROWS%%</tbody>
+            </table>
+          </div>
+          <div id="bt-detail-panel" class="bt-detail-panel" hidden></div>
       </section>
     </main>
     %%DEV_FOOTER%%
