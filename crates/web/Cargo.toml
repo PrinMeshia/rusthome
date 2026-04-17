@@ -15,7 +15,9 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.7"
+bytes = "1"
 clap = { workspace = true }
+rumqttd = { workspace = true }
 rusthome-app = { path = "../app" }
 rusthome-core = { path = "../core" }
 rusthome-infra = { path = "../infra" }

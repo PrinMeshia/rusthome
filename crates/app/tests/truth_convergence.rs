@@ -1,5 +1,7 @@
 //! EPIC 1 — Observed truth vs Derived projection (reconciliation).
 
+mod common;
+
 use rusthome_app::{
     append_observed_light_fact, correction_for_observed_light, replay_state, ObservedLightAppend,
     RunLimits,
@@ -19,8 +21,7 @@ fn correction_none_when_projection_matches_observed() {
 
 #[test]
 fn derived_on_then_observed_off_emits_correction_and_final_state_off() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let mut journal = Journal::open(&jpath).unwrap();
     let causal = Uuid::nil();
 

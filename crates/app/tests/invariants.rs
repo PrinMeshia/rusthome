@@ -1,13 +1,14 @@
 //! §6.18 — projection / journal invariants (anti-drift).
 
+mod common;
+
 use rusthome_core::{apply_event, ApplyError, Event, FactEvent, Provenance, State};
 use rusthome_infra::{load_and_sort, verify_contiguous_sequence, JournalAppend};
 use uuid::Uuid;
 
 #[test]
 fn replay_fails_on_contradictory_duplicate_light_on() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let mut journal = rusthome_infra::Journal::open(&jpath).unwrap();
     let f = FactEvent::LightOn {
         room: "x".into(),

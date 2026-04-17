@@ -1,13 +1,14 @@
 //! EPIC 3 — append dedup on `command_id`.
 
+mod common;
+
 use rusthome_core::{CommandEvent, Event};
 use rusthome_infra::{Journal, JournalAppend, JournalAppendOutcome};
 use uuid::Uuid;
 
 #[test]
 fn second_append_same_command_id_skips_line() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let mut journal = Journal::open(&jpath).unwrap();
     let cid = Uuid::from_u128(0xdead_beef_0001);
     let base = JournalAppend {

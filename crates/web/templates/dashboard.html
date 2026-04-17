@@ -199,6 +199,18 @@
     .journal-scroll { max-height: min(52vh, 28rem); overflow: auto; margin: 0 -0.25rem; padding: 0 0.25rem; }
     .mono { font-family: ui-monospace, "Cascadia Code", "Source Code Pro", monospace; font-size: 0.82rem; }
     .left-stack { display: flex; flex-direction: column; gap: 1rem; }
+    .btn-toggle {
+      font-size: 0.78rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--link);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-toggle:hover { filter: brightness(1.15); }
+    .btn-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
     @media (prefers-reduced-motion: reduce) {
       button:active { transform: none; }
     }
@@ -232,7 +244,7 @@
         <section class="card">
           <h2>Lights</h2>
           <table class="data">
-            <thead><tr><th>Room</th><th>State</th><th>Provenance</th></tr></thead>
+            <thead><tr><th>Room</th><th>State</th><th>Provenance</th><th id="action-hdr"></th></tr></thead>
             <tbody id="lights-body">%%LIGHTS_ROWS%%</tbody>
           </table>
         </section>
@@ -261,6 +273,12 @@
   const errEl = $('error-bar');
   let timer = null;
   const journalLimit = %%JOURNAL_LIMIT%%;
+  const brokerAvailable = %%BROKER_AVAILABLE%%;
+
+  if (brokerAvailable) {
+    const hdr = $('action-hdr');
+    if (hdr) hdr.textContent = 'Action';
+  }
 
   function provLabel(v) {
     if (!v) return '\u2014';
@@ -278,10 +296,11 @@
     const lights = st.lights || {};
     const provMap = st.light_last_provenance || {};
     const rooms = Object.keys(lights).sort();
+    const cols = brokerAvailable ? 4 : 3;
     if (rooms.length === 0) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 3;
+      td.colSpan = cols;
       td.className = 'cell-empty';
       const em = document.createElement('em');
       em.textContent = 'No rooms in projection yet';
@@ -305,6 +324,15 @@
       tr.appendChild(tdRoom);
       tr.appendChild(tdState);
       tr.appendChild(tdProv);
+      if (brokerAvailable) {
+        const tdAction = document.createElement('td');
+        const btn = document.createElement('button');
+        btn.className = 'btn-toggle';
+        btn.textContent = on ? 'Turn Off' : 'Turn On';
+        btn.addEventListener('click', () => toggleLight(room, on));
+        tdAction.appendChild(btn);
+        tr.appendChild(tdAction);
+      }
       tbody.appendChild(tr);
     }
 
@@ -422,6 +450,27 @@
       tr.appendChild(tdTs);
       tr.appendChild(tdDetail);
       tbody.appendChild(tr);
+    }
+  }
+
+  async function toggleLight(room, currentlyOn) {
+    const action = currentlyOn ? 'turn_off' : 'turn_on';
+    try {
+      const res = await fetch('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, room })
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        errEl.textContent = 'Command failed: ' + msg;
+        errEl.classList.add('visible');
+        return;
+      }
+      setTimeout(refresh, 300);
+    } catch (e) {
+      errEl.textContent = 'Command failed: ' + (e && e.message ? e.message : e);
+      errEl.classList.add('visible');
     }
   }
 

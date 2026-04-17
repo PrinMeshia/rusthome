@@ -1,5 +1,7 @@
 //! `minimal` registry (R1+R3): motion turns light on without notify / usage-log chain.
 
+mod common;
+
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
 use rusthome_core::{ConfigSnapshot, ObservationEvent, State, StateView};
 use rusthome_infra::Journal;
@@ -8,8 +10,7 @@ use uuid::Uuid;
 
 #[test]
 fn minimal_motion_light_on_without_usage_log() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = RulesPreset::Minimal.load_registry().unwrap();

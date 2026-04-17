@@ -1,5 +1,7 @@
 //! `TurnOffLight` command + R7: journal append and projection.
 
+mod common;
+
 use rusthome_app::{
     ingest_command_with_causal, ingest_observation_with_causal, replay_state, RunLimits,
 };
@@ -13,8 +15,7 @@ use uuid::Uuid;
 
 #[test]
 fn turn_off_after_motion_clears_light() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let causal_on = Uuid::from_u128(0x70FF_0001);
     let causal_off = Uuid::from_u128(0x70FF_0002);
     let room = "kitchen".to_string();
@@ -74,8 +75,7 @@ fn turn_off_after_motion_clears_light() {
 
 #[test]
 fn io_anchored_rejects_derived_light_off_from_r7() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let room = "io-off".to_string();
     let causal_on = Uuid::from_u128(0x10FF_A001);
     let causal_off = Uuid::from_u128(0x10FF_A002);

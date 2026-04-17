@@ -1,23 +1,25 @@
 //! Integration test: R8/R9/R10/R11 for temperature and contact events.
 
+mod common;
+
+use std::path::Path;
+
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
 use rusthome_core::{ConfigSnapshot, ObservationEvent, State, StateView};
 use rusthome_infra::Journal;
 use rusthome_rules::Registry;
 use uuid::Uuid;
 
-fn line_count(path: &std::path::Path) -> usize {
-    std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .filter(|l| !l.is_empty())
-        .count()
+fn line_count(path: &Path) -> usize {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s.lines().filter(|l| !l.is_empty()).count(),
+        Err(_) => 0,
+    }
 }
 
 #[test]
 fn temperature_reading_records_and_logs() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::home_default();
@@ -55,8 +57,7 @@ fn temperature_reading_records_and_logs() {
 
 #[test]
 fn contact_changed_records_and_logs() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::home_default();
@@ -94,8 +95,7 @@ fn contact_changed_records_and_logs() {
 
 #[test]
 fn temperature_updates_overwrite_previous() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::home_default();
@@ -127,8 +127,7 @@ fn temperature_updates_overwrite_previous() {
 
 #[test]
 fn contact_toggles() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::home_default();
@@ -169,8 +168,7 @@ fn contact_toggles() {
 
 #[test]
 fn minimal_preset_records_sensor_facts_without_logging() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::minimal_default();

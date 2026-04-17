@@ -3,6 +3,8 @@
 //! Includes **limited** §6.6 paths (`max_events_per_run`, `max_events_generated_per_root`):
 //! early stop + `ErrorOccurred` remain reproducible.
 
+mod common;
+
 use proptest::prelude::*;
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
 use rusthome_core::{ConfigSnapshot, ObservationEvent, RunError, State};
@@ -11,8 +13,7 @@ use rusthome_rules::Registry;
 use uuid::Uuid;
 
 fn run_motion_chain(n: usize) -> (State, String) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::v0_default();
@@ -39,8 +40,7 @@ fn run_motion_chain(n: usize) -> (State, String) {
 
 /// Same V0 motion under §6.6 caps: journal and result identical across two runs.
 fn run_motion_limited(max_events_per_run: u64, max_events_generated_per_root: u64) -> (State, String, Result<(), RunError>) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::v0_default();

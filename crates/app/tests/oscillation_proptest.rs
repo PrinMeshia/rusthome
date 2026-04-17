@@ -5,6 +5,8 @@
 //! `drain_fifo` converges or hits caps **deterministically** (same inputs → identical
 //! journal, state, and error).
 
+mod common;
+
 use std::sync::Arc;
 
 use proptest::prelude::*;
@@ -167,8 +169,7 @@ fn run_deep_chain(
     rooms: &[String],
     limits: RunLimits,
 ) -> (State, String, Vec<Result<(), RunError>>) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = deep_registry();
@@ -196,8 +197,7 @@ fn run_deep_chain_limited(
     max_run: u64,
     max_gen: u64,
 ) -> (State, String, Result<(), RunError>) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = deep_registry();

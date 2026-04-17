@@ -1,17 +1,20 @@
 //! `home` preset: R1+R3+R4+R5 (usage log present, **no** `NotifyUser` / R2).
 
+mod common;
+
+use std::path::Path;
+
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
 use rusthome_core::{ConfigSnapshot, ObservationEvent, State, StateView};
 use rusthome_infra::Journal;
 use rusthome_rules::RulesPreset;
 use uuid::Uuid;
 
-fn line_count(path: &std::path::Path) -> usize {
-    std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .filter(|l| !l.is_empty())
-        .count()
+fn line_count(path: &Path) -> usize {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s.lines().filter(|l| !l.is_empty()).count(),
+        Err(_) => 0,
+    }
 }
 
 #[test]
@@ -21,8 +24,7 @@ fn home_one_motion_journal_shorter_than_v0() {
     let cfg = ConfigSnapshot::default();
     let limits = RunLimits::default();
 
-    let dir_h = tempfile::tempdir().unwrap();
-    let path_h = dir_h.path().join("events.jsonl");
+    let (_dir_h, path_h) = common::temp_events_jsonl();
     let mut journal_h = Journal::open(&path_h).unwrap();
     let mut state_h = State::new();
     let reg_h = RulesPreset::Home.load_registry().unwrap();
@@ -40,8 +42,7 @@ fn home_one_motion_journal_shorter_than_v0() {
     )
     .unwrap();
 
-    let dir_v = tempfile::tempdir().unwrap();
-    let path_v = dir_v.path().join("events.jsonl");
+    let (_dir_v, path_v) = common::temp_events_jsonl();
     let mut journal_v = Journal::open(&path_v).unwrap();
     let mut state_v = State::new();
     let reg_v = RulesPreset::V0.load_registry().unwrap();

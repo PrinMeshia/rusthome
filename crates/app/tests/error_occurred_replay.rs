@@ -1,5 +1,7 @@
 //! EPIC 4 — `ErrorOccurred` ignored by replay (facts-only projection).
 
+mod common;
+
 use rusthome_app::replay_state;
 use rusthome_core::{ErrorOccurredEvent, Event, FactEvent, Provenance, StateView};
 use rusthome_infra::{load_and_sort, verify_contiguous_sequence, Journal, JournalAppend};
@@ -7,8 +9,7 @@ use uuid::Uuid;
 
 #[test]
 fn replay_skips_error_occurred_lines() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let mut journal = Journal::open(&jpath).unwrap();
 
     journal

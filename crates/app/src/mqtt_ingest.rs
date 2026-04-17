@@ -1,24 +1,26 @@
-//! MQTT message → `ObservationEvent` dispatch and ingestion.
+//! MQTT message → event dispatch and ingestion.
 //!
-//! Parses MQTT topic + payload to determine the observation type:
+//! Parses MQTT topic + payload to determine the event type:
 //!
-//! | Topic pattern | Observation |
+//! | Topic pattern | Event |
 //! |---|---|
-//! | `sensors/motion/{room}` | `MotionDetected` |
-//! | `sensors/temperature/{sensor_id}` | `TemperatureReading` |
-//! | `sensors/contact/{sensor_id}` | `ContactChanged` |
+//! | `sensors/motion/{room}` | `ObservationEvent::MotionDetected` |
+//! | `sensors/temperature/{sensor_id}` | `ObservationEvent::TemperatureReading` |
+//! | `sensors/contact/{sensor_id}` | `ObservationEvent::ContactChanged` |
+//! | `commands/light/{room}/on` | `CommandEvent::TurnOnLight` |
+//! | `commands/light/{room}/off` | `CommandEvent::TurnOffLight` |
 //!
 //! Used by the embedded broker (`rusthome serve`) and the standalone
 //! `mqtt_motion_ingest` example (backward-compatible).
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusthome_core::{ConfigSnapshot, ObservationEvent, RunError, State};
+use rusthome_core::{CommandEvent, ConfigSnapshot, ObservationEvent, RunError, State};
 use rusthome_infra::Journal;
 use rusthome_rules::Registry;
 use uuid::Uuid;
 
-use crate::{ingest_observation_with_causal, RunLimits};
+use crate::{ingest_command_with_causal, ingest_observation_with_causal, RunLimits};
 
 /// Wall-clock milliseconds since epoch.
 pub fn wall_millis() -> i64 {
@@ -123,6 +125,33 @@ pub fn observation_from_mqtt(
     }
 }
 
+/// Classify an MQTT publish into a `CommandEvent`.
+///
+/// Returns `None` if the topic doesn't match any known command pattern.
+pub fn command_from_mqtt(
+    topic: &str,
+    _payload: &[u8],
+) -> Result<Option<CommandEvent>, String> {
+    let rest = match topic.strip_prefix("commands/") {
+        Some(r) => r,
+        None => return Ok(None),
+    };
+
+    let segments: Vec<&str> = rest.splitn(3, '/').collect();
+    match segments.as_slice() {
+        ["light", room, "on"] if !room.is_empty() => Ok(Some(CommandEvent::TurnOnLight {
+            room: (*room).to_string(),
+            command_id: Uuid::new_v4(),
+        })),
+        ["light", room, "off"] if !room.is_empty() => Ok(Some(CommandEvent::TurnOffLight {
+            room: (*room).to_string(),
+            command_id: Uuid::new_v4(),
+        })),
+        ["light", ..] => Err(format!("malformed command topic: {topic}")),
+        _ => Ok(None),
+    }
+}
+
 fn parse_temperature(payload: &[u8]) -> Result<i32, String> {
     let s = std::str::from_utf8(payload).map_err(|_| "payload is not UTF-8")?;
     let s = s.trim();
@@ -174,19 +203,30 @@ pub fn dispatch_mqtt_publish(
     limits: RunLimits,
     last_ts: &mut i64,
 ) -> Result<Option<String>, DispatchError> {
-    let observation = match observation_from_mqtt(topic, payload) {
-        Ok(Some(obs)) => obs,
-        Ok(None) => return Ok(None),
+    match observation_from_mqtt(topic, payload) {
+        Ok(Some(obs)) => {
+            let candidate = optional_ts_from_payload(payload).unwrap_or_else(wall_millis);
+            let ts = next_ts(last_ts, candidate);
+            let causal = Uuid::new_v4();
+            let desc = format!("{obs:?}");
+            ingest_observation_with_causal(journal, state, registry, config, ts, obs, causal, limits)?;
+            return Ok(Some(desc));
+        }
         Err(e) => return Err(DispatchError::Parse(e)),
-    };
+        Ok(None) => {}
+    }
 
-    let candidate = optional_ts_from_payload(payload).unwrap_or_else(wall_millis);
-    let ts = next_ts(last_ts, candidate);
-    let causal = Uuid::new_v4();
-
-    let desc = format!("{observation:?}");
-    ingest_observation_with_causal(journal, state, registry, config, ts, observation, causal, limits)?;
-    Ok(Some(desc))
+    match command_from_mqtt(topic, payload) {
+        Ok(Some(cmd)) => {
+            let ts = next_ts(last_ts, wall_millis());
+            let causal = Uuid::new_v4();
+            let desc = format!("{cmd:?}");
+            ingest_command_with_causal(journal, state, registry, config, ts, cmd, causal, limits)?;
+            Ok(Some(desc))
+        }
+        Err(e) => Err(DispatchError::Parse(e)),
+        Ok(None) => Ok(None),
+    }
 }
 
 /// Errors from [`dispatch_mqtt_publish`].
@@ -300,5 +340,41 @@ mod tests {
     fn non_sensor_topic_returns_none() {
         let obs = observation_from_mqtt("other/topic", b"data").unwrap();
         assert!(obs.is_none());
+    }
+
+    #[test]
+    fn command_light_on() {
+        let cmd = command_from_mqtt("commands/light/hall/on", b"").unwrap();
+        assert!(matches!(
+            cmd,
+            Some(CommandEvent::TurnOnLight { room, .. }) if room == "hall"
+        ));
+    }
+
+    #[test]
+    fn command_light_off() {
+        let cmd = command_from_mqtt("commands/light/kitchen/off", b"").unwrap();
+        assert!(matches!(
+            cmd,
+            Some(CommandEvent::TurnOffLight { room, .. }) if room == "kitchen"
+        ));
+    }
+
+    #[test]
+    fn command_unknown_returns_none() {
+        let cmd = command_from_mqtt("commands/thermostat/living/set", b"").unwrap();
+        assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn command_malformed_light_topic() {
+        let result = command_from_mqtt("commands/light/", b"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_command_topic_returns_none() {
+        let cmd = command_from_mqtt("sensors/motion/hall", b"").unwrap();
+        assert!(cmd.is_none());
     }
 }

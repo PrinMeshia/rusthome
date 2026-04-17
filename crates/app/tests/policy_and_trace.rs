@@ -1,5 +1,7 @@
 //! §14.5 IoAnchored, §15 trace, §6.16 CommandIo (no-op state).
 
+mod common;
+
 use rusthome_app::{ingest_observation_with_causal_traced, replay_state, RunLimits};
 use rusthome_core::{
     apply_event, ConfigSnapshot, Event, FactEvent, ObservationEvent, PhysicalProjectionMode,
@@ -11,8 +13,7 @@ use uuid::Uuid;
 
 #[test]
 fn io_anchored_rejects_derived_light_from_rule() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let registry = Registry::v0_default();
     registry.validate_boot().unwrap();
     let config = ConfigSnapshot {
@@ -67,8 +68,7 @@ fn io_anchored_rejects_derived_light_from_rule() {
 
 #[test]
 fn rule_trace_records_all_rules_per_event() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let registry = Registry::v0_default();
     registry.validate_boot().unwrap();
     let config = ConfigSnapshot {
@@ -108,8 +108,7 @@ fn rule_trace_records_all_rules_per_event() {
 
 #[test]
 fn command_io_fact_replay_is_state_noop() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let mut journal = Journal::open(&jpath).unwrap();
     journal
         .append(JournalAppend {
@@ -148,8 +147,7 @@ fn command_io_fact_replay_is_state_noop() {
 
 #[test]
 fn journal_line_is_canonical_sorted_keys() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let mut journal = Journal::open(&jpath).unwrap();
     journal
         .append(JournalAppend {

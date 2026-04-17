@@ -1,5 +1,7 @@
 //! Plan §16 — MotionDetected cascade: order, sequences, projection.
 
+mod common;
+
 use std::collections::VecDeque;
 
 use rusthome_app::{drain_fifo, ingest_observation_with_causal, replay_state, RunLimits};
@@ -12,8 +14,7 @@ use uuid::Uuid;
 
 #[test]
 fn scenario_16_journal_order_and_state() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let causal = Uuid::from_u128(0x0016_0000_0000_0000_0000_0000_0000_0001);
 
     let registry = Registry::v0_default();
@@ -62,8 +63,7 @@ fn scenario_16_journal_order_and_state() {
 
 #[test]
 fn replay_does_not_mutate_journal() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     std::fs::write(&jpath, "").unwrap();
     let before = std::fs::read_to_string(&jpath).unwrap();
     replay_state(&jpath).unwrap();
@@ -72,8 +72,7 @@ fn replay_does_not_mutate_journal() {
 
 #[test]
 fn fact_then_rules_light_on_triggers_log_usage() {
-    let dir = tempfile::tempdir().unwrap();
-    let jpath = dir.path().join("events.jsonl");
+    let (_dir, jpath) = common::temp_events_jsonl();
     let registry = Registry::v0_default();
     registry.validate_boot().unwrap();
     let config = ConfigSnapshot {

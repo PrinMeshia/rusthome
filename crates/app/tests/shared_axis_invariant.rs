@@ -1,5 +1,7 @@
 //! §6.18 — rules sharing the same trigger / state axis: errors and explicit bounds.
 
+mod common;
+
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
 use rusthome_core::{ApplyError, ConfigSnapshot, ObservationEvent, RunError, State};
 use rusthome_infra::Journal;
@@ -9,8 +11,7 @@ use uuid::Uuid;
 /// Two motions in the same room: V0 cascade applies two derived `LightOn` → deterministic business failure.
 #[test]
 fn second_motion_same_room_is_light_already_on() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::v0_default();
@@ -53,8 +54,7 @@ fn second_motion_same_room_is_light_already_on() {
 /// R1 and R2 both consume `MotionDetected`: one observation yields multiple commands; result stays reproducible (stable line count for V0 registry).
 #[test]
 fn dual_subscribers_fixed_journal_shape() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("events.jsonl");
+    let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
     let reg = Registry::v0_default();

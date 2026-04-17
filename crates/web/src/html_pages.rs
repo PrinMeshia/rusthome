@@ -1,4 +1,4 @@
-//! Server-side HTML fragments and full page templates (`include_str!`).
+//! Server-side HTML fragments and full page templates (`include_str!` from `../templates/`).
 
 use rusthome_core::State as CoreState;
 
@@ -7,13 +7,14 @@ use crate::journal::JournalLineDto;
 use crate::system_info;
 use crate::util::esc_html;
 
-pub(crate) fn lights_rows_html(state: &CoreState) -> String {
+pub(crate) fn lights_rows_html(state: &CoreState, broker_available: bool) -> String {
     let mut rows_html = String::new();
     let rows = state.light_room_rows();
+    let colspan = if broker_available { 4 } else { 3 };
     if rows.is_empty() {
-        rows_html.push_str(
-            r#"<tr><td colspan="3" class="cell-empty"><em>No rooms in projection yet</em></td></tr>"#,
-        );
+        rows_html.push_str(&format!(
+            r#"<tr><td colspan="{colspan}" class="cell-empty"><em>No rooms in projection yet</em></td></tr>"#,
+        ));
     } else {
         for (room, on, prov) in rows {
             let p = prov
@@ -21,12 +22,26 @@ pub(crate) fn lights_rows_html(state: &CoreState) -> String {
                 .unwrap_or_else(|| "—".to_string());
             let badge_class = if on { "on" } else { "off" };
             let badge_text = if on { "On" } else { "Off" };
+            let action_col = if broker_available {
+                let btn_text = if on { "Turn Off" } else { "Turn On" };
+                let action = if on { "turn_off" } else { "turn_on" };
+                format!(
+                    r#"<td><button class="btn-toggle" onclick="toggleLight('{room}',{on})"data-action="{action}">{btn_text}</button></td>"#,
+                    room = esc_html(&room),
+                    on = if on { "true" } else { "false" },
+                    action = action,
+                    btn_text = btn_text,
+                )
+            } else {
+                String::new()
+            };
             rows_html.push_str(&format!(
-                r#"<tr><td class="col-room">{}</td><td><span class="badge {}">{}</span></td><td class="col-prov">{}</td></tr>"#,
-                esc_html(&room),
-                badge_class,
-                badge_text,
-                esc_html(&p),
+                r#"<tr><td class="col-room">{room}</td><td><span class="badge {cls}">{badge}</span></td><td class="col-prov">{prov}</td>{action}</tr>"#,
+                room = esc_html(&room),
+                cls = badge_class,
+                badge = badge_text,
+                prov = esc_html(&p),
+                action = action_col,
             ));
         }
     }
@@ -114,8 +129,9 @@ pub(crate) fn render_dashboard_page(
     journal_rows: &str,
     summary_cards: &str,
     sensors_rows: &str,
+    broker_available: bool,
 ) -> String {
-    include_str!("dashboard.html")
+    include_str!("../templates/dashboard.html")
         .replace("%%SECURITY_BANNER%%", security_banner)
         .replace("%%JOURNAL_PATH%%", journal_path_display)
         .replace("%%LIGHTS_ROWS%%", lights_rows)
@@ -123,6 +139,10 @@ pub(crate) fn render_dashboard_page(
         .replace("%%SUMMARY_CARDS%%", summary_cards)
         .replace("%%SENSORS_ROWS%%", sensors_rows)
         .replace("%%JOURNAL_LIMIT%%", &DASHBOARD_JOURNAL_ROWS.to_string())
+        .replace(
+            "%%BROKER_AVAILABLE%%",
+            if broker_available { "true" } else { "false" },
+        )
 }
 
 pub(crate) fn render_sensors_page(
@@ -130,7 +150,7 @@ pub(crate) fn render_sensors_page(
     temp_rows: &str,
     contact_rows: &str,
 ) -> String {
-    include_str!("sensors.html")
+    include_str!("../templates/sensors.html")
         .replace("%%SECURITY_BANNER%%", security_banner)
         .replace("%%TEMPERATURE_ROWS%%", temp_rows)
         .replace("%%CONTACT_ROWS%%", contact_rows)
@@ -380,7 +400,7 @@ pub(crate) fn render_system_page(
     resources: &str,
     bluetooth: &str,
 ) -> String {
-    include_str!("system.html")
+    include_str!("../templates/system.html")
         .replace("%%SECURITY_BANNER%%", security_banner)
         .replace("%%RUSTHOME_ROWS%%", rusthome)
         .replace("%%HOST_ROWS%%", host)
