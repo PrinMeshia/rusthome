@@ -17,5 +17,5 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    rusthome_web::run(args.data_dir, &args.bind, None).await
+    rusthome_web::run(args.data_dir, &args.bind, None, None).await
 }

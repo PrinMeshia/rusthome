@@ -1,47 +1,72 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rusthome — Sensors</title>
+  <title>rusthome — Capteurs</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="page-sensors">
   <div class="wrap">
     %%SECURITY_BANNER%%
     <div id="error-bar" role="alert"></div>
-    <header>
-      <h1>rusthome</h1>
-      <span class="tagline">sensors</span>
-    </header>
-    <nav class="links">
-      <a href="/">Dashboard</a>
-      <span class="nav-current">Sensors</span>
-      <a href="/system">System</a>
-      <a href="/api/state">JSON state</a>
-    </nav>
-    <div class="toolbar">
-      <button type="button" id="btn-refresh">Refresh</button>
-      <label><input type="checkbox" id="auto-refresh" checked> Auto-refresh (4s)</label>
-      <span id="updated-at"></span>
+    <div class="app-sticky">
+      <div class="app-brand">
+        <h1>rusthome</h1>
+        <span class="tagline">capteurs</span>
+      </div>
+      %%MAIN_NAV%%
+      <div class="toolbar">
+        <button type="button" id="btn-refresh">Actualiser</button>
+        <label class="prefs-label">Actualisation auto
+          <select id="refresh-interval-select" class="pref-select" aria-label="Intervalle d’actualisation automatique">
+            <option value="0">Manuelle</option>
+            <option value="2000">2 s</option>
+            <option value="4000">4 s</option>
+            <option value="10000">10 s</option>
+          </select>
+        </label>
+        <label class="prefs-label">Densité
+          <select id="density-select" class="pref-select" aria-label="Densité d’affichage">
+            <option value="comfortable">Confort</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
+        <label class="prefs-label">Thème
+          <select id="theme-select" class="pref-select" aria-label="Thème d’affichage">
+            <option value="system">Système</option>
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+          </select>
+        </label>
+        <span id="updated-at"></span>
+      </div>
     </div>
-    <div class="grid">
-      <section class="card">
-        <h2>&#x1F321;&#xFE0F; Temperatures</h2>
-        <table class="data">
-          <thead><tr><th>Sensor</th><th>Value</th></tr></thead>
-          <tbody id="temp-body">%%TEMPERATURE_ROWS%%</tbody>
-        </table>
-      </section>
-      <section class="card">
-        <h2>&#x1F6AA; Contacts</h2>
-        <table class="data">
-          <thead><tr><th>Sensor</th><th>State</th></tr></thead>
-          <tbody id="contact-body">%%CONTACT_ROWS%%</tbody>
-        </table>
-      </section>
-    </div>
+    <main class="app-main">
+      <div class="grid">
+        <section class="card">
+          <h2>&#x1F321;&#xFE0F; Températures</h2>
+          <div class="table-scroll-wrap">
+            <table class="data">
+              <thead><tr><th>Capteur</th><th>Valeur</th></tr></thead>
+              <tbody id="temp-body">%%TEMPERATURE_ROWS%%</tbody>
+            </table>
+          </div>
+        </section>
+        <section class="card">
+          <h2>&#x1F6AA; Contacts</h2>
+          <div class="table-scroll-wrap">
+            <table class="data">
+              <thead><tr><th>Capteur</th><th>État</th></tr></thead>
+              <tbody id="contact-body">%%CONTACT_ROWS%%</tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+    %%DEV_FOOTER%%
   </div>
+  <script src="/static/common.js" defer></script>
   <script src="/static/sensors.js" defer></script>
 </body>
 </html>

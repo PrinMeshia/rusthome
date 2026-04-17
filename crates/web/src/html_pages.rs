@@ -7,13 +7,81 @@ use crate::journal::JournalLineDto;
 use crate::system_info;
 use crate::util::{esc_attr, esc_html};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NavPage {
+    Dashboard,
+    Sensors,
+    System,
+}
+
+pub(crate) fn main_nav_html(active: NavPage) -> String {
+    let mut out =
+        String::from(r#"<nav class="app-nav" aria-label="Navigation principale">"#);
+    let items = [
+        (NavPage::Dashboard, "/", "Tableau de bord"),
+        (NavPage::Sensors, "/sensors", "Capteurs"),
+        (NavPage::System, "/system", "Système"),
+    ];
+    for (page, href, label) in items {
+        if page == active {
+            out.push_str(&format!(
+                r#"<span class="app-nav-item is-active" aria-current="page">{}</span>"#,
+                esc_html(label)
+            ));
+        } else {
+            out.push_str(&format!(
+                r#"<a class="app-nav-item" href="{}">{}</a>"#,
+                esc_html(href),
+                esc_html(label)
+            ));
+        }
+    }
+    out.push_str("</nav>");
+    out
+}
+
+fn dev_footer_inner(links: &[(&str, &str)]) -> String {
+    let mut body = String::new();
+    for (href, label) in links {
+        body.push_str(&format!(
+            r#"<a href="{}">{}</a>"#,
+            esc_html(href),
+            esc_html(label)
+        ));
+    }
+    format!(
+        r#"<footer class="app-footer-dev"><strong>API</strong>{}</footer>"#,
+        body
+    )
+}
+
+pub(crate) fn dev_footer_dashboard() -> String {
+    dev_footer_inner(&[
+        ("/api/state", "État JSON"),
+        ("/api/journal?limit=40", "Journal JSON"),
+        ("/api/health", "Santé"),
+    ])
+}
+
+pub(crate) fn dev_footer_sensors() -> String {
+    dev_footer_inner(&[("/api/state", "État JSON")])
+}
+
+pub(crate) fn dev_footer_system() -> String {
+    dev_footer_inner(&[
+        ("/api/system", "Système JSON"),
+        ("/api/bluetooth", "Bluetooth JSON"),
+        ("/api/health", "Santé"),
+    ])
+}
+
 pub(crate) fn lights_rows_html(state: &CoreState, broker_available: bool) -> String {
     let mut rows_html = String::new();
     let rows = state.light_room_rows();
     let colspan = if broker_available { 4 } else { 3 };
     if rows.is_empty() {
         rows_html.push_str(&format!(
-            r#"<tr><td colspan="{colspan}" class="cell-empty"><em>No rooms in projection yet</em></td></tr>"#,
+            r#"<tr><td colspan="{colspan}" class="cell-empty"><em>Aucune pièce dans la projection</em></td></tr>"#,
         ));
     } else {
         for (room, on, prov) in rows {
@@ -21,14 +89,19 @@ pub(crate) fn lights_rows_html(state: &CoreState, broker_available: bool) -> Str
                 .map(|p| format!("{p:?}"))
                 .unwrap_or_else(|| "—".to_string());
             let badge_class = if on { "on" } else { "off" };
-            let badge_text = if on { "On" } else { "Off" };
+            let badge_text = if on { "Allumée" } else { "Éteinte" };
             let action_col = if broker_available {
-                let btn_text = if on { "Turn Off" } else { "Turn On" };
+                let aria = format!(
+                    "Lumière {}, {}",
+                    room,
+                    if on { "allumée" } else { "éteinte" }
+                );
                 format!(
-                    r#"<td><button type="button" class="btn-toggle" data-room="{room}" data-on="{on_attr}">{btn_text}</button></td>"#,
+                    r#"<td><button type="button" class="light-switch" role="switch" aria-checked="{checked}" data-room="{room}" data-on="{on_attr}" aria-label="{aria}"></button></td>"#,
+                    checked = if on { "true" } else { "false" },
                     room = esc_attr(&room),
                     on_attr = if on { "true" } else { "false" },
-                    btn_text = btn_text,
+                    aria = esc_attr(&aria),
                 )
             } else {
                 String::new()
@@ -48,7 +121,7 @@ pub(crate) fn lights_rows_html(state: &CoreState, broker_available: bool) -> Str
 
 pub(crate) fn journal_rows_html(dtos: &[JournalLineDto]) -> String {
     if dtos.is_empty() {
-        return r#"<tr><td colspan="3" class="cell-empty"><em>Journal is empty</em></td></tr>"#
+        return r#"<tr><td colspan="3" class="cell-empty"><em>Le journal est vide</em></td></tr>"#
             .to_string();
     }
     let mut out = String::new();
@@ -75,7 +148,7 @@ pub(crate) fn summary_cards_html(state: &CoreState, journal_count: usize) -> Str
     let sensor_count = temp_count + contact_count;
 
     format!(
-        r#"<div class="summary-card"><span class="summary-icon">{icon_rooms}</span><span class="summary-value">{rooms}</span><span class="summary-label">Rooms</span></div><div class="summary-card"><span class="summary-icon">{icon_light}</span><span class="summary-value">{lights_on}/{rooms}</span><span class="summary-label">Lights On</span></div><div class="summary-card"><span class="summary-icon">{icon_sensor}</span><span class="summary-value">{sensor_count}</span><span class="summary-label">Sensors</span></div><div class="summary-card"><span class="summary-icon">{icon_journal}</span><span class="summary-value">{journal_count}</span><span class="summary-label">Events</span></div>"#,
+        r#"<div class="summary-card"><span class="summary-icon">{icon_rooms}</span><span class="summary-value">{rooms}</span><span class="summary-label">Pièces</span></div><div class="summary-card"><span class="summary-icon">{icon_light}</span><span class="summary-value">{lights_on}/{rooms}</span><span class="summary-label">Lampes</span></div><div class="summary-card"><span class="summary-icon">{icon_sensor}</span><span class="summary-value">{sensor_count}</span><span class="summary-label">Capteurs</span></div><div class="summary-card"><span class="summary-icon">{icon_journal}</span><span class="summary-value">{journal_count}</span><span class="summary-label">Événements</span></div>"#,
         icon_rooms = "\u{1F3E0}",
         icon_light = "\u{1F4A1}",
         icon_sensor = "\u{1F321}\u{FE0F}",
@@ -87,14 +160,14 @@ pub(crate) fn sensors_rows_html(state: &CoreState) -> String {
     let mut out = String::new();
 
     if state.temperature_readings().is_empty() && state.contact_states().is_empty() {
-        return r#"<tr><td colspan="3" class="cell-empty"><em>No sensor data yet</em></td></tr>"#
+        return r#"<tr><td colspan="3" class="cell-empty"><em>Aucune donnée capteur</em></td></tr>"#
             .to_string();
     }
 
     for (sensor_id, millideg) in state.temperature_readings() {
         let celsius = *millideg as f64 / 1000.0;
         out.push_str(&format!(
-            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge badge-fact">{val:.1}{deg}C</span></td><td class="col-prov">temperature</td></tr>"#,
+            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge badge-fact">{val:.1}{deg}C</span></td><td class="col-prov">température</td></tr>"#,
             icon = "\u{1F321}\u{FE0F}",
             id = esc_html(sensor_id),
             val = celsius,
@@ -104,9 +177,9 @@ pub(crate) fn sensors_rows_html(state: &CoreState) -> String {
 
     for (sensor_id, open) in state.contact_states() {
         let (state_text, badge_class) = if *open {
-            ("Open", "badge-obs")
+            ("Ouvert", "badge-obs")
         } else {
-            ("Closed", "badge-fact")
+            ("Fermé", "badge-fact")
         };
         out.push_str(&format!(
             r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge {cls}">{st}</span></td><td class="col-prov">contact</td></tr>"#,
@@ -128,16 +201,18 @@ pub(crate) fn render_dashboard_page(
     summary_cards: &str,
     sensors_rows: &str,
     broker_available: bool,
+    live_push: bool,
 ) -> String {
     let dashboard_cfg = format!(
-        r#"{{"journalLimit":{},"brokerAvailable":{}}}"#,
+        r#"{{"journalLimit":{},"brokerAvailable":{},"livePush":{}}}"#,
         DASHBOARD_JOURNAL_ROWS,
-        if broker_available { "true" } else { "false" }
+        if broker_available { "true" } else { "false" },
+        if live_push { "true" } else { "false" }
     );
     let broker_pill = if broker_available {
-        r#"<span class="broker-pill broker-ok" title="Embedded MQTT broker: light commands enabled">MQTT ready</span>"#
+        r#"<span id="broker-pill" class="broker-pill broker-ok" title="Broker MQTT intégré : commandes lumière actives">MQTT prêt</span>"#
     } else {
-        r#"<span class="broker-pill broker-off" title="No broker: use rusthome serve to publish commands">Read-only</span>"#
+        r#"<span id="broker-pill" class="broker-pill broker-off" title="Pas de broker : lancez rusthome serve pour publier des commandes">Lecture seule</span>"#
     };
     include_str!("../templates/dashboard.html")
         .replace("%%SECURITY_BANNER%%", security_banner)
@@ -148,6 +223,8 @@ pub(crate) fn render_dashboard_page(
         .replace("%%SENSORS_ROWS%%", sensors_rows)
         .replace("%%RH_DASHBOARD_CONFIG%%", &dashboard_cfg)
         .replace("%%BROKER_PILL%%", broker_pill)
+        .replace("%%MAIN_NAV%%", &main_nav_html(NavPage::Dashboard))
+        .replace("%%DEV_FOOTER%%", &dev_footer_dashboard())
 }
 
 pub(crate) fn render_sensors_page(
@@ -159,11 +236,14 @@ pub(crate) fn render_sensors_page(
         .replace("%%SECURITY_BANNER%%", security_banner)
         .replace("%%TEMPERATURE_ROWS%%", temp_rows)
         .replace("%%CONTACT_ROWS%%", contact_rows)
+        .replace("%%MAIN_NAV%%", &main_nav_html(NavPage::Sensors))
+        .replace("%%DEV_FOOTER%%", &dev_footer_sensors())
 }
 
 pub(crate) fn temperature_rows_html(state: &CoreState) -> String {
     if state.temperature_readings().is_empty() {
-        return r#"<tr><td colspan="2" class="cell-empty"><em>No temperature sensors yet</em></td></tr>"#.to_string();
+        return r#"<tr><td colspan="2" class="cell-empty"><em>Aucun capteur de température</em></td></tr>"#
+            .to_string();
     }
     let mut out = String::new();
     for (sensor_id, millideg) in state.temperature_readings() {
@@ -181,14 +261,14 @@ pub(crate) fn temperature_rows_html(state: &CoreState) -> String {
 
 pub(crate) fn contact_rows_html(state: &CoreState) -> String {
     if state.contact_states().is_empty() {
-        return r#"<tr><td colspan="2" class="cell-empty"><em>No contact sensors yet</em></td></tr>"#.to_string();
+        return r#"<tr><td colspan="2" class="cell-empty"><em>Aucun contact</em></td></tr>"#.to_string();
     }
     let mut out = String::new();
     for (sensor_id, open) in state.contact_states() {
         let (state_text, badge_class) = if *open {
-            ("Open", "badge-obs")
+            ("Ouvert", "badge-obs")
         } else {
-            ("Closed", "badge-fact")
+            ("Fermé", "badge-fact")
         };
         out.push_str(&format!(
             r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge {cls}">{st}</span></td></tr>"#,
@@ -213,25 +293,25 @@ pub(crate) fn system_rusthome_rows(s: &system_info::SystemSnapshot) -> String {
     let mut rows = String::new();
     rows.push_str(&kv_row_th("Service", &s.service));
     rows.push_str(&kv_row_th(
-        "rusthome-web version",
+        "Version rusthome-web",
         &s.rusthome_version,
     ));
-    rows.push_str(&kv_row_th("Listen address", &s.listen));
-    rows.push_str(&kv_row_th("Data directory", &s.data_dir));
-    rows.push_str(&kv_row_th("Journal file", &s.journal_path));
+    rows.push_str(&kv_row_th("Adresse d’écoute", &s.listen));
+    rows.push_str(&kv_row_th("Répertoire de données", &s.data_dir));
+    rows.push_str(&kv_row_th("Fichier journal", &s.journal_path));
     let journal_meta = match (s.journal_file_present, s.journal_file_bytes) {
-        (true, Some(b)) => format!("present — {}", system_info::fmt_bytes(b)),
-        (true, None) => "present".to_string(),
-        (false, _) => "missing (no events yet)".to_string(),
+        (true, Some(b)) => format!("présent — {}", system_info::fmt_bytes(b)),
+        (true, None) => "présent".to_string(),
+        (false, _) => "absent (pas encore d’événements)".to_string(),
     };
-    rows.push_str(&kv_row_th("Journal on disk", &journal_meta));
+    rows.push_str(&kv_row_th("Journal sur disque", &journal_meta));
     rows
 }
 
 pub(crate) fn system_host_rows(s: &system_info::SystemSnapshot) -> String {
     let mut rows = String::new();
     rows.push_str(&kv_row_th(
-        "Hostname",
+        "Nom d’hôte",
         &system_info::opt_str(&s.hostname),
     ));
     rows.push_str(&kv_row_th(
@@ -239,16 +319,16 @@ pub(crate) fn system_host_rows(s: &system_info::SystemSnapshot) -> String {
         &system_info::opt_str(&s.os_long.clone().or(s.os_name.clone())),
     ));
     rows.push_str(&kv_row_th(
-        "Kernel",
+        "Noyau",
         &system_info::opt_str(&s.kernel),
     ));
-    rows.push_str(&kv_row_th("CPU architecture", &s.cpu_arch));
+    rows.push_str(&kv_row_th("Architecture CPU", &s.cpu_arch));
     rows.push_str(&kv_row_th(
-        "Uptime",
+        "Durée de fonctionnement",
         &system_info::fmt_duration(s.uptime_secs),
     ));
     rows.push_str(&kv_row_th(
-        "Load average",
+        "Charge moyenne",
         &format!(
             "{:.2} · {:.2} · {:.2} (1 / 5 / 15 min)",
             s.load_avg_1, s.load_avg_5, s.load_avg_15
@@ -265,7 +345,7 @@ pub(crate) fn system_resource_rows(s: &system_info::SystemSnapshot) -> String {
         0.0
     };
     rows.push_str(&format!(
-        r#"<tr><th>Memory</th><td><div class="meter-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{p:.0}"><div class="meter-fill" style="width:{p:.1}%"></div></div><span class="meter-label">{used} / {total} ({p:.0}%)</span></td></tr>"#,
+        r#"<tr><th>Mémoire</th><td><div class="meter-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{p:.0}"><div class="meter-fill" style="width:{p:.1}%"></div></div><span class="meter-label">{used} / {total} ({p:.0}%)</span></td></tr>"#,
         p = mem_pct,
         used = esc_html(&system_info::fmt_bytes(s.memory_used_bytes)),
         total = esc_html(&system_info::fmt_bytes(s.memory_total_bytes)),
@@ -283,19 +363,19 @@ pub(crate) fn system_resource_rows(s: &system_info::SystemSnapshot) -> String {
     rows.push_str(&kv_row_th("Swap", &swap_s));
 
     rows.push_str(&kv_row_th(
-        "CPUs (logical)",
+        "CPU (logiques)",
         &s.cpu_count.to_string(),
     ));
     rows.push_str(&kv_row_th(
-        "CPU usage (global)",
-        &format!("{:.1}%", s.cpu_usage_percent),
+        "Utilisation CPU",
+        &format!("{:.1} %", s.cpu_usage_percent),
     ));
 
     let temp_s = s
         .cpu_temp_c_max
         .map(|t| format!("{t:.1} °C"))
         .unwrap_or_else(|| "—".to_string());
-    rows.push_str(&kv_row_th("Temperature (sensors max)", &temp_s));
+    rows.push_str(&kv_row_th("Température (max capteurs)", &temp_s));
 
     let disk_s = match (
         s.disk_mount.as_deref(),
@@ -303,21 +383,21 @@ pub(crate) fn system_resource_rows(s: &system_info::SystemSnapshot) -> String {
         s.disk_available_bytes,
     ) {
         (Some(mount), Some(tot), Some(avail)) => format!(
-            "{} — {} free of {} (data dir mount)",
+            "{} — {} libres sur {} (volume données)",
             mount,
             system_info::fmt_bytes(avail),
             system_info::fmt_bytes(tot)
         ),
-        _ => "— (could not map mount)".to_string(),
+        _ => "— (montage introuvable)".to_string(),
     };
-    rows.push_str(&kv_row_th("Disk (data volume)", &disk_s));
+    rows.push_str(&kv_row_th("Disque (données)", &disk_s));
     rows
 }
 
 fn tri_bool_label(v: Option<bool>) -> &'static str {
     match v {
-        Some(true) => "yes",
-        Some(false) => "no",
+        Some(true) => "oui",
+        Some(false) => "non",
         None => "—",
     }
 }
@@ -343,31 +423,31 @@ pub(crate) fn bluetooth_rows_html(s: &bluetooth_info::BluetoothSnapshot) -> Stri
         } else {
             a.address.as_str()
         };
-        rows.push_str(&kv_row_th("Address", addr));
+        rows.push_str(&kv_row_th("Adresse", addr));
         let nm = if a.name.is_empty() {
             "—"
         } else {
             a.name.as_str()
         };
-        rows.push_str(&kv_row_th("Name", nm));
+        rows.push_str(&kv_row_th("Nom", nm));
         if let Some(ref c) = a.device_class {
-            rows.push_str(&kv_row_th("Device class", c));
+            rows.push_str(&kv_row_th("Classe d’appareil", c));
         }
         if let Some(b) = a.rfkill_soft_blocked {
             rows.push_str(&kv_row_th(
-                "RF-kill (soft)",
-                if b { "blocked" } else { "unblocked" },
+                "RF-kill (logiciel)",
+                if b { "bloqué" } else { "débloqué" },
             ));
         }
-        rows.push_str(&kv_row_th("Powered", tri_bool_label(a.powered)));
+        rows.push_str(&kv_row_th("Alimenté", tri_bool_label(a.powered)));
         rows.push_str(&kv_row_th(
-            "Discoverable",
+            "Visible",
             tri_bool_label(a.discoverable),
         ));
-        rows.push_str(&kv_row_th("Pairable", tri_bool_label(a.pairable)));
+        rows.push_str(&kv_row_th("Appairable", tri_bool_label(a.pairable)));
     }
     if !s.devices.is_empty() {
-        rows.push_str(r#"<tr><th colspan="2" class="subhdr">Known devices</th></tr>"#);
+        rows.push_str(r#"<tr><th colspan="2" class="subhdr">Appareils connus</th></tr>"#);
         for d in &s.devices {
             let mut td = if d.name.is_empty() {
                 "—".to_string()
@@ -376,16 +456,16 @@ pub(crate) fn bluetooth_rows_html(s: &bluetooth_info::BluetoothSnapshot) -> Stri
             };
             if let Some(p) = d.paired {
                 td.push_str(if p {
-                    " · paired: yes"
+                    " · appairé : oui"
                 } else {
-                    " · paired: no"
+                    " · appairé : non"
                 });
             }
             if let Some(c) = d.connected {
                 td.push_str(if c {
-                    " · connected: yes"
+                    " · connecté : oui"
                 } else {
-                    " · connected: no"
+                    " · connecté : non"
                 });
             }
             rows.push_str(&format!(
@@ -411,4 +491,6 @@ pub(crate) fn render_system_page(
         .replace("%%HOST_ROWS%%", host)
         .replace("%%RESOURCE_ROWS%%", resources)
         .replace("%%BLUETOOTH_ROWS%%", bluetooth)
+        .replace("%%MAIN_NAV%%", &main_nav_html(NavPage::System))
+        .replace("%%DEV_FOOTER%%", &dev_footer_system())
 }

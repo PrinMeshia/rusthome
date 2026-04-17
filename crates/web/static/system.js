@@ -1,7 +1,10 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const errEl = $('error-bar');
+  const btnRefresh = $('btn-refresh');
+  const updatedEl = $('updated-at');
   let timer = null;
+  let consecutiveFails = 0;
 
   function fmtBytes(n) {
     const GB = 1024 * 1024 * 1024, MB = 1024 * 1024;
@@ -36,24 +39,24 @@
   function render(s) {
     const os = s.os_long || s.os_name || '\u2014';
     const journalMeta = s.journal_file_present
-      ? (s.journal_file_bytes != null ? 'present \u2014 ' + fmtBytes(s.journal_file_bytes) : 'present')
-      : 'missing (no events yet)';
+      ? (s.journal_file_bytes != null ? 'pr\u00E9sent \u2014 ' + fmtBytes(s.journal_file_bytes) : 'pr\u00E9sent')
+      : 'absent (pas encore d\u2019\u00E9v\u00E9nements)';
 
     $('tbody-rusthome').innerHTML =
       trKV('Service', esc(s.service)) +
-      trKV('rusthome-web version', esc(s.rusthome_version)) +
-      trKV('Listen address', esc(s.listen)) +
-      trKV('Data directory', esc(s.data_dir)) +
-      trKV('Journal file', esc(s.journal_path)) +
-      trKV('Journal on disk', esc(journalMeta));
+      trKV('Version rusthome-web', esc(s.rusthome_version)) +
+      trKV('Adresse d\u2019\u00E9coute', esc(s.listen)) +
+      trKV('R\u00E9pertoire de donn\u00E9es', esc(s.data_dir)) +
+      trKV('Fichier journal', esc(s.journal_path)) +
+      trKV('Journal sur disque', esc(journalMeta));
 
     $('tbody-host').innerHTML =
-      trKV('Hostname', esc(s.hostname || '\u2014')) +
+      trKV('Nom d\u2019h\u00F4te', esc(s.hostname || '\u2014')) +
       trKV('OS', esc(os)) +
-      trKV('Kernel', esc(s.kernel || '\u2014')) +
-      trKV('CPU architecture', esc(s.cpu_arch)) +
-      trKV('Uptime', esc(fmtDuration(s.uptime_secs))) +
-      trKV('Load average', esc(
+      trKV('Noyau', esc(s.kernel || '\u2014')) +
+      trKV('Architecture CPU', esc(s.cpu_arch)) +
+      trKV('Dur\u00E9e de fonctionnement', esc(fmtDuration(s.uptime_secs))) +
+      trKV('Charge moyenne', esc(
         s.load_avg_1.toFixed(2) + ' \u00B7 ' + s.load_avg_5.toFixed(2) + ' \u00B7 ' + s.load_avg_15.toFixed(2) + ' (1 / 5 / 15 min)'
       ));
 
@@ -61,7 +64,7 @@
       ? Math.min(100, (s.memory_used_bytes / s.memory_total_bytes) * 100)
       : 0;
     const memRow =
-      '<tr><th>Memory</th><td>' +
+      '<tr><th>M\u00E9moire</th><td>' +
       '<div class="meter-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' +
       Math.round(memPct) + '">' +
       '<div class="meter-fill" style="width:' + memPct.toFixed(1) + '%"></div></div>' +
@@ -72,10 +75,10 @@
       ? esc(fmtBytes(s.swap_used_bytes) + ' / ' + fmtBytes(s.swap_total_bytes))
       : '\u2014';
 
-    let disk = '\u2014 (could not map mount)';
+    let disk = '\u2014 (montage introuvable)';
     if (s.disk_mount && s.disk_total_bytes != null && s.disk_available_bytes != null) {
-      disk = esc(s.disk_mount) + ' \u2014 ' + esc(fmtBytes(s.disk_available_bytes)) + ' free of ' +
-        esc(fmtBytes(s.disk_total_bytes)) + ' (data dir mount)';
+      disk = esc(s.disk_mount) + ' \u2014 ' + esc(fmtBytes(s.disk_available_bytes)) + ' libres sur ' +
+        esc(fmtBytes(s.disk_total_bytes)) + ' (volume donn\u00E9es)';
     }
 
     const temp = s.cpu_temp_c_max != null ? s.cpu_temp_c_max.toFixed(1) + ' \u00B0C' : '\u2014';
@@ -83,15 +86,15 @@
     $('tbody-resources').innerHTML =
       memRow +
       trKV('Swap', swap) +
-      trKV('CPUs (logical)', esc(String(s.cpu_count))) +
-      trKV('CPU usage (global)', esc(s.cpu_usage_percent.toFixed(1) + '%')) +
-      trKV('Temperature (sensors max)', esc(temp)) +
-      trKV('Disk (data volume)', disk);
+      trKV('CPU (logiques)', esc(String(s.cpu_count))) +
+      trKV('Utilisation CPU', esc(s.cpu_usage_percent.toFixed(1) + ' %')) +
+      trKV('Temp\u00E9rature (max capteurs)', esc(temp)) +
+      trKV('Disque (donn\u00E9es)', disk);
   }
 
   function triBool(v) {
-    if (v === true) return 'yes';
-    if (v === false) return 'no';
+    if (v === true) return 'oui';
+    if (v === false) return 'non';
     return '\u2014';
   }
 
@@ -108,23 +111,23 @@
     }
     for (const a of adapters) {
       html += '<tr><th colspan="2" class="subhdr">' + esc(a.hci_device) + '</th></tr>';
-      html += trKV('Address', esc(a.address || '\u2014'));
-      html += trKV('Name', esc(a.name || '\u2014'));
-      if (a.device_class) html += trKV('Device class', esc(a.device_class));
+      html += trKV('Adresse', esc(a.address || '\u2014'));
+      html += trKV('Nom', esc(a.name || '\u2014'));
+      if (a.device_class) html += trKV('Classe d\u2019appareil', esc(a.device_class));
       if (typeof a.rfkill_soft_blocked === 'boolean') {
-        html += trKV('RF-kill (soft)', esc(a.rfkill_soft_blocked ? 'blocked' : 'unblocked'));
+        html += trKV('RF-kill (logiciel)', esc(a.rfkill_soft_blocked ? 'bloqu\u00E9' : 'd\u00E9bloqu\u00E9'));
       }
-      html += trKV('Powered', esc(triBool(a.powered)));
-      html += trKV('Discoverable', esc(triBool(a.discoverable)));
-      html += trKV('Pairable', esc(triBool(a.pairable)));
+      html += trKV('Aliment\u00E9', esc(triBool(a.powered)));
+      html += trKV('Visible', esc(triBool(a.discoverable)));
+      html += trKV('Appairable', esc(triBool(a.pairable)));
     }
     if (devices.length) {
-      html += '<tr><th colspan="2" class="subhdr">Known devices</th></tr>';
+      html += '<tr><th colspan="2" class="subhdr">Appareils connus</th></tr>';
       for (const d of devices) {
         let td = d.name || '\u2014';
-        if (typeof d.paired === 'boolean') td += d.paired ? ' \u00B7 paired: yes' : ' \u00B7 paired: no';
+        if (typeof d.paired === 'boolean') td += d.paired ? ' \u00B7 appair\u00E9 : oui' : ' \u00B7 appair\u00E9 : non';
         if (typeof d.connected === 'boolean') {
-          td += d.connected ? ' \u00B7 connected: yes' : ' \u00B7 connected: no';
+          td += d.connected ? ' \u00B7 connect\u00E9 : oui' : ' \u00B7 connect\u00E9 : non';
         }
         html += '<tr><th class="mono">' + esc(d.address) + '</th><td>' + esc(td) + '</td></tr>';
       }
@@ -135,6 +138,7 @@
   async function refresh() {
     errEl.classList.remove('visible');
     errEl.textContent = '';
+    if (btnRefresh) btnRefresh.classList.add('is-loading');
     try {
       const [sysRes, btRes] = await Promise.all([
         fetch('/api/system'),
@@ -149,28 +153,44 @@
           renderBluetooth(JSON.parse(btText));
         } catch (_) {
           $('tbody-bluetooth').innerHTML = '<tr><td colspan="2" class="cell-empty">' +
-            esc('Invalid JSON from /api/bluetooth') + '</td></tr>';
+            esc('JSON invalide depuis /api/bluetooth') + '</td></tr>';
         }
       } else {
         $('tbody-bluetooth').innerHTML = '<tr><td colspan="2" class="cell-empty">' +
-          esc('Bluetooth API: ' + btText) + '</td></tr>';
+          esc('API Bluetooth : ' + btText) + '</td></tr>';
       }
 
-      $('updated-at').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      consecutiveFails = 0;
+      if (updatedEl) {
+        updatedEl.classList.remove('is-offline');
+        updatedEl.textContent = 'Mis \u00E0 jour : ' + new Date().toLocaleTimeString('fr-FR');
+      }
     } catch (e) {
-      errEl.textContent = 'Refresh failed: ' + (e && e.message ? e.message : e);
+      consecutiveFails++;
+      errEl.textContent = 'Actualisation impossible : ' + (e && e.message ? e.message : e);
       errEl.classList.add('visible');
+      if (updatedEl) {
+        if (consecutiveFails >= 2) updatedEl.classList.add('is-offline');
+        updatedEl.textContent = consecutiveFails >= 2
+          ? 'Hors ligne ou erreur r\u00E9p\u00E9t\u00E9e'
+          : 'Erreur : ' + new Date().toLocaleTimeString('fr-FR');
+      }
+    } finally {
+      if (btnRefresh) btnRefresh.classList.remove('is-loading');
     }
   }
 
   function schedule() {
     if (timer) clearInterval(timer);
     timer = null;
-    if ($('auto-refresh').checked) timer = setInterval(refresh, 4000);
+    const ms = typeof window.rhGetRefreshIntervalMs === 'function'
+      ? window.rhGetRefreshIntervalMs()
+      : 4000;
+    if (ms > 0) timer = setInterval(refresh, ms);
   }
 
   $('btn-refresh').addEventListener('click', () => refresh());
-  $('auto-refresh').addEventListener('change', schedule);
+  window.addEventListener('rh-refresh-interval-changed', schedule);
   schedule();
   refresh();
 })();

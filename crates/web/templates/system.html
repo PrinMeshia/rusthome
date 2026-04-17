@@ -1,60 +1,87 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rusthome — System</title>
+  <title>rusthome — Système</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="page-system">
   <div class="wrap">
     %%SECURITY_BANNER%%
     <div id="error-bar" role="alert"></div>
-    <header>
-      <h1>rusthome</h1>
-      <span class="tagline">system</span>
-    </header>
-    <nav class="links">
-      <a href="/">Dashboard</a>
-      <a href="/sensors">Sensors</a>
-      <span class="nav-current">System</span>
-      <a href="/api/system">JSON system</a>
-      <a href="/api/bluetooth">JSON bluetooth</a>
-      <a href="/api/health">health</a>
-    </nav>
-    <div class="toolbar">
-      <button type="button" id="btn-refresh">Refresh</button>
-      <label><input type="checkbox" id="auto-refresh" checked> Auto-refresh (4s)</label>
-      <span id="updated-at"></span>
+    <div class="app-sticky">
+      <div class="app-brand">
+        <h1>rusthome</h1>
+        <span class="tagline">système</span>
+      </div>
+      %%MAIN_NAV%%
+      <div class="toolbar">
+        <button type="button" id="btn-refresh">Actualiser</button>
+        <label class="prefs-label">Actualisation auto
+          <select id="refresh-interval-select" class="pref-select" aria-label="Intervalle d’actualisation automatique">
+            <option value="0">Manuelle</option>
+            <option value="2000">2 s</option>
+            <option value="4000">4 s</option>
+            <option value="10000">10 s</option>
+          </select>
+        </label>
+        <label class="prefs-label">Densité
+          <select id="density-select" class="pref-select" aria-label="Densité d’affichage">
+            <option value="comfortable">Confort</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
+        <label class="prefs-label">Thème
+          <select id="theme-select" class="pref-select" aria-label="Thème d’affichage">
+            <option value="system">Système</option>
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+          </select>
+        </label>
+        <span id="updated-at"></span>
+      </div>
     </div>
-    <div class="grid">
-      <section class="card">
-        <h2>rusthome</h2>
-        <table class="data">
-          <tbody id="tbody-rusthome">%%RUSTHOME_ROWS%%</tbody>
-        </table>
+    <main class="app-main">
+      <div class="grid">
+        <section class="card">
+          <h2>rusthome</h2>
+          <div class="table-scroll-wrap">
+            <table class="data">
+              <tbody id="tbody-rusthome">%%RUSTHOME_ROWS%%</tbody>
+            </table>
+          </div>
+        </section>
+        <section class="card">
+          <h2>Hôte</h2>
+          <div class="table-scroll-wrap">
+            <table class="data">
+              <tbody id="tbody-host">%%HOST_ROWS%%</tbody>
+            </table>
+          </div>
+        </section>
+        <section class="card">
+          <h2>Ressources</h2>
+          <div class="table-scroll-wrap">
+            <table class="data">
+              <tbody id="tbody-resources">%%RESOURCE_ROWS%%</tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <section class="card wide bluetooth-card">
+        <h2>Bluetooth</h2>
+        <p class="bt-hint">Lecture seule : adaptateurs (<code>/sys/class/bluetooth</code>, <code>bluetoothctl show</code>) et appareils connus (<code>bluetoothctl devices</code>, avec Appairé / Connecté quand c’est disponible). Pas de scan, pas d’appairage, pas de BLE GATT — utilisez BlueZ ou une intégration future.</p>
+        <div class="table-scroll-wrap">
+          <table class="data">
+            <tbody id="tbody-bluetooth">%%BLUETOOTH_ROWS%%</tbody>
+          </table>
+        </div>
       </section>
-      <section class="card">
-        <h2>Host</h2>
-        <table class="data">
-          <tbody id="tbody-host">%%HOST_ROWS%%</tbody>
-        </table>
-      </section>
-      <section class="card">
-        <h2>Resources</h2>
-        <table class="data">
-          <tbody id="tbody-resources">%%RESOURCE_ROWS%%</tbody>
-        </table>
-      </section>
-    </div>
-    <section class="card wide bluetooth-card">
-      <h2>Bluetooth</h2>
-      <p class="bt-hint">Read-only: adapters (<code>/sys/class/bluetooth</code>, <code>bluetoothctl show</code>) and known devices (<code>bluetoothctl devices</code>, plus Paired / Connected when supported). No scan, no pairing, no BLE GATT — use BlueZ or a future integration.</p>
-      <table class="data">
-        <tbody id="tbody-bluetooth">%%BLUETOOTH_ROWS%%</tbody>
-      </table>
-    </section>
+    </main>
+    %%DEV_FOOTER%%
   </div>
+  <script src="/static/common.js" defer></script>
   <script src="/static/system.js" defer></script>
 </body>
 </html>

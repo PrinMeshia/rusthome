@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
+use tokio::sync::broadcast;
 use rusthome_app::mqtt_ingest::{dispatch_mqtt_publish, wall_millis};
 use rusthome_app::replay_state;
 use rusthome_infra::Journal;
@@ -21,8 +22,10 @@ pub async fn serve_all_in_one(
 
     if no_broker {
         eprintln!("rusthome serve: broker disabled (--no-broker), web dashboard only");
-        return rusthome_web::run(data_dir, &bind, None).await;
+        return rusthome_web::run(data_dir, &bind, None, None).await;
     }
+
+    let (live_tx, _) = broadcast::channel::<()>(128);
 
     let config = broker_config(mqtt_port);
     let mut broker = rumqttd::Broker::new(config);
@@ -54,25 +57,54 @@ pub async fn serve_all_in_one(
     });
 
     let ingest_data_dir = data_dir.clone();
+    let live_for_ingest = live_tx.clone();
     let ingest_handle = tokio::task::spawn_blocking(move || {
-        if let Err(e) = run_ingest_loop(&ingest_data_dir, &mut link_tx, &mut link_rx) {
+        if let Err(e) = run_ingest_loop(
+            &ingest_data_dir,
+            &mut link_tx,
+            &mut link_rx,
+            Some(live_for_ingest),
+        ) {
             eprintln!("ingest loop error: {e}");
         }
     });
 
     let web_handle = tokio::spawn(async move {
-        if let Err(e) = rusthome_web::run(data_dir, &bind, Some(mqtt_pub)).await {
+        if let Err(e) = rusthome_web::run(data_dir, &bind, Some(mqtt_pub), Some(live_tx)).await {
             eprintln!("web error: {e}");
         }
     });
+    let web_abort = web_handle.abort_handle();
 
+    // `rumqttd::Broker::start` runs in `spawn_blocking` and never returns while the broker is up.
+    // When the web server exits (Ctrl+C → graceful shutdown), dropping the runtime would otherwise
+    // block forever waiting on those blocking threads. Exit the process so Ctrl+C always ends the CLI.
     tokio::select! {
-        _ = web_handle => {},
-        _ = broker_handle => {},
-        _ = ingest_handle => {},
+        _ = tokio::signal::ctrl_c() => {
+            eprintln!("rusthome serve: arrêt (Ctrl+C)");
+            web_abort.abort();
+            std::process::exit(0);
+        }
+        res = web_handle => {
+            match res {
+                Ok(()) => {}
+                Err(e) => eprintln!("web task: {e}"),
+            }
+            std::process::exit(0);
+        }
+        res = broker_handle => {
+            if let Err(e) = res {
+                eprintln!("broker task: {e}");
+            }
+            std::process::exit(0);
+        }
+        res = ingest_handle => {
+            if let Err(e) = res {
+                eprintln!("ingest task: {e}");
+            }
+            std::process::exit(0);
+        }
     }
-
-    Ok(())
 }
 
 fn broker_config(mqtt_port: u16) -> rumqttd::Config {
@@ -120,6 +152,7 @@ fn run_ingest_loop(
     data_dir: &Path,
     _link_tx: &mut rumqttd::local::LinkTx,
     link_rx: &mut rumqttd::local::LinkRx,
+    live_tx: Option<broadcast::Sender<()>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rusthome_file = config::load_rusthome_file(data_dir)?;
     let preset = config::resolve_rules_preset(None, &rusthome_file)?;
@@ -179,6 +212,9 @@ fn run_ingest_loop(
                 ) {
                     Ok(Some(desc)) => {
                         eprintln!("ingested {desc} topic={topic}");
+                        if let Some(ref tx) = live_tx {
+                            let _ = tx.send(());
+                        }
                     }
                     Ok(None) => {
                         eprintln!("skip unknown topic: {topic}");

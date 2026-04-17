@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>rusthome</title>
+  <title>rusthome — Tableau de bord</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="page-dashboard">
@@ -11,54 +11,85 @@
     %%SECURITY_BANNER%%
     <div id="command-toast" role="status" aria-live="polite" aria-atomic="true"></div>
     <div id="error-bar" role="alert"></div>
-    <header>
-      <h1>rusthome</h1>
-      <span class="tagline">home automation</span>
-    </header>
-    <p class="meta-path">Journal: <code>%%JOURNAL_PATH%%</code></p>
-    <nav class="links">
-      <span class="nav-current">Dashboard</span>
-      <a href="/sensors">Sensors</a>
-      <a href="/system">System</a>
-      <a href="/api/state">JSON state</a>
-      <a href="/api/journal?limit=40">JSON journal</a>
-      <a href="/api/health">health</a>
-    </nav>
-    <div class="toolbar">
-      %%BROKER_PILL%%
-      <button type="button" id="btn-refresh">Refresh</button>
-      <label><input type="checkbox" id="auto-refresh" checked> Auto-refresh (4s)</label>
-      <span id="updated-at"></span>
+    <div class="app-sticky">
+      <div class="app-brand">
+        <h1>rusthome</h1>
+        <span class="tagline">domotique déterministe</span>
+      </div>
+      %%MAIN_NAV%%
+      <div class="toolbar">
+        %%BROKER_PILL%%
+        <button type="button" id="btn-refresh">Actualiser</button>
+        <label class="prefs-label">Actualisation auto
+          <select id="refresh-interval-select" class="pref-select" aria-label="Intervalle d’actualisation automatique">
+            <option value="0">Manuelle</option>
+            <option value="2000">2 s</option>
+            <option value="4000">4 s</option>
+            <option value="10000">10 s</option>
+          </select>
+        </label>
+        <label class="prefs-label">Lignes journal
+          <select id="journal-limit-select" class="pref-select" aria-label="Nombre de lignes du journal à charger">
+            <option value="20">20</option>
+            <option value="40">40</option>
+            <option value="80">80</option>
+            <option value="120">120</option>
+          </select>
+        </label>
+        <label class="prefs-label">Densité
+          <select id="density-select" class="pref-select" aria-label="Densité d’affichage">
+            <option value="comfortable">Confort</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
+        <label class="prefs-label">Thème
+          <select id="theme-select" class="pref-select" aria-label="Thème d’affichage">
+            <option value="system">Système</option>
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+          </select>
+        </label>
+        <span id="updated-at"></span>
+      </div>
     </div>
-    <div class="summary-bar" id="summary-bar">%%SUMMARY_CARDS%%</div>
-    <div class="grid">
-      <div class="left-stack">
+    <p class="meta-path">Journal : <code>%%JOURNAL_PATH%%</code></p>
+    <main class="app-main">
+      <div class="summary-bar" id="summary-bar">%%SUMMARY_CARDS%%</div>
+      <div class="grid">
+        <div class="left-stack">
+          <section class="card">
+            <h2>Lumières</h2>
+            <div class="table-scroll-wrap">
+              <table class="data">
+                <thead><tr><th>Pièce</th><th>État</th><th>Provenance</th><th id="action-hdr"></th></tr></thead>
+                <tbody id="lights-body">%%LIGHTS_ROWS%%</tbody>
+              </table>
+            </div>
+          </section>
+          <section class="card">
+            <h2>Capteurs</h2>
+            <div class="table-scroll-wrap">
+              <table class="data">
+                <thead><tr><th>Capteur</th><th>Valeur</th><th>Type</th></tr></thead>
+                <tbody id="sensors-body">%%SENSORS_ROWS%%</tbody>
+              </table>
+            </div>
+          </section>
+        </div>
         <section class="card">
-          <h2>Lights</h2>
-          <table class="data">
-            <thead><tr><th>Room</th><th>State</th><th>Provenance</th><th id="action-hdr"></th></tr></thead>
-            <tbody id="lights-body">%%LIGHTS_ROWS%%</tbody>
-          </table>
-        </section>
-        <section class="card">
-          <h2>Sensors</h2>
-          <table class="data">
-            <thead><tr><th>Sensor</th><th>Value</th><th>Type</th></tr></thead>
-            <tbody id="sensors-body">%%SENSORS_ROWS%%</tbody>
-          </table>
+          <h2>Journal récent (plus récent en premier)</h2>
+          <div class="journal-scroll">
+            <table class="data">
+              <thead><tr><th>Seq</th><th>Temps</th><th>Détail</th></tr></thead>
+              <tbody id="journal-body">%%JOURNAL_ROWS%%</tbody>
+            </table>
+          </div>
         </section>
       </div>
-      <section class="card">
-        <h2>Recent journal (newest first)</h2>
-        <div class="journal-scroll">
-          <table class="data">
-            <thead><tr><th>Seq</th><th>Time</th><th>Detail</th></tr></thead>
-            <tbody id="journal-body">%%JOURNAL_ROWS%%</tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+    </main>
+    %%DEV_FOOTER%%
   </div>
+  <script src="/static/common.js" defer></script>
   <script type="application/json" id="rh-dashboard-config">%%RH_DASHBOARD_CONFIG%%</script>
   <script src="/static/dashboard.js" defer></script>
 </body>

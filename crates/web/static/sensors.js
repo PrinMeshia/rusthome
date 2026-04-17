@@ -1,7 +1,10 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const errEl = $('error-bar');
+  const btnRefresh = $('btn-refresh');
+  const updatedEl = $('updated-at');
   let timer = null;
+  let consecutiveFails = 0;
 
   function fmtCelsius(millideg) {
     return (millideg / 1000).toFixed(1) + '\u00B0C';
@@ -18,7 +21,7 @@
       td.colSpan = 2;
       td.className = 'cell-empty';
       const em = document.createElement('em');
-      em.textContent = 'No temperature sensors yet';
+      em.textContent = 'Aucun capteur de température';
       td.appendChild(em);
       tr.appendChild(td);
       tempBody.appendChild(tr);
@@ -49,7 +52,7 @@
       td.colSpan = 2;
       td.className = 'cell-empty';
       const em = document.createElement('em');
-      em.textContent = 'No contact sensors yet';
+      em.textContent = 'Aucun contact';
       td.appendChild(em);
       tr.appendChild(td);
       contactBody.appendChild(tr);
@@ -63,7 +66,7 @@
         const b = document.createElement('span');
         const isOpen = !!contacts[id];
         b.className = 'badge ' + (isOpen ? 'badge-obs' : 'badge-fact');
-        b.textContent = isOpen ? 'Open' : 'Closed';
+        b.textContent = isOpen ? 'Ouvert' : 'Fermé';
         tdVal.appendChild(b);
         tr.appendChild(tdName);
         tr.appendChild(tdVal);
@@ -75,26 +78,42 @@
   async function refresh() {
     errEl.classList.remove('visible');
     errEl.textContent = '';
+    if (btnRefresh) btnRefresh.classList.add('is-loading');
     try {
       const res = await fetch('/api/state');
       if (!res.ok) throw new Error(await res.text());
       renderSensors(await res.json());
-      $('updated-at').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      consecutiveFails = 0;
+      if (updatedEl) {
+        updatedEl.classList.remove('is-offline');
+        updatedEl.textContent = 'Mis à jour : ' + new Date().toLocaleTimeString('fr-FR');
+      }
     } catch (e) {
-      errEl.textContent = 'Refresh failed: ' + (e && e.message ? e.message : e);
+      consecutiveFails++;
+      errEl.textContent = 'Actualisation impossible : ' + (e && e.message ? e.message : e);
       errEl.classList.add('visible');
+      if (updatedEl) {
+        if (consecutiveFails >= 2) updatedEl.classList.add('is-offline');
+        updatedEl.textContent = consecutiveFails >= 2
+          ? 'Hors ligne ou erreur répétée'
+          : 'Erreur : ' + new Date().toLocaleTimeString('fr-FR');
+      }
+    } finally {
+      if (btnRefresh) btnRefresh.classList.remove('is-loading');
     }
   }
 
   function schedule() {
     if (timer) clearInterval(timer);
     timer = null;
-    if ($('auto-refresh').checked)
-      timer = setInterval(refresh, 4000);
+    const ms = typeof window.rhGetRefreshIntervalMs === 'function'
+      ? window.rhGetRefreshIntervalMs()
+      : 4000;
+    if (ms > 0) timer = setInterval(refresh, ms);
   }
 
   $('btn-refresh').addEventListener('click', () => refresh());
-  $('auto-refresh').addEventListener('change', schedule);
+  window.addEventListener('rh-refresh-interval-changed', schedule);
   schedule();
   refresh();
 })();

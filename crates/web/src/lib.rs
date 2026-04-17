@@ -9,16 +9,25 @@ mod security;
 mod system_info;
 mod util;
 
+use std::convert::Infallible;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::sync::{Arc, Mutex};
 
 use axum::{
     extract::{Query, State},
     http::{header, StatusCode},
-    response::{Html, IntoResponse},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        Html, IntoResponse,
+    },
     routing::{get, post},
     Json, Router,
 };
+use futures_util::stream::StreamExt as _;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tokio_stream::wrappers::BroadcastStream;
 use serde::Deserialize;
 
 use crate::html_pages::{
@@ -41,16 +50,22 @@ struct AppState {
     listen_display: String,
     /// When running with the embedded broker, allows publishing commands.
     mqtt_pub: Option<MqttPub>,
+    /// When set (`rusthome serve` with broker), ingest notifies on each journal update → `/api/live` SSE.
+    live_tx: Option<broadcast::Sender<()>>,
 }
 
 /// Run the Axum server until SIGINT (Ctrl+C). Creates `data_dir` if missing.
 ///
 /// Pass `mqtt_pub` when running under `rusthome serve` with the embedded broker.
 /// Pass `None` for standalone / `--no-broker` mode (command endpoint returns 503).
+///
+/// Pass `live_events` when ingest runs in-process (`rusthome serve` with broker): each journal
+/// update from MQTT dispatch notifies `GET /api/live` (SSE) so the dashboard can refresh immediately.
 pub async fn run(
     data_dir: PathBuf,
     bind: &str,
     mqtt_pub: Option<MqttPub>,
+    live_events: Option<broadcast::Sender<()>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&data_dir)?;
 
@@ -58,10 +73,12 @@ pub async fn run(
         data_dir: data_dir.clone(),
         listen_display: bind.to_string(),
         mqtt_pub,
+        live_tx: live_events,
     };
 
     let app = Router::new()
         .route("/static/app.css", get(serve_app_css))
+        .route("/static/common.js", get(serve_common_js))
         .route("/static/dashboard.js", get(serve_dashboard_js))
         .route("/static/sensors.js", get(serve_sensors_js))
         .route("/static/system.js", get(serve_system_js))
@@ -70,6 +87,7 @@ pub async fn run(
         .route("/system", get(page_system))
         .route("/api/state", get(api_state))
         .route("/api/journal", get(api_journal))
+        .route("/api/live", get(api_live_sse))
         .route("/api/command", post(api_command))
         .route("/api/system", get(api_system))
         .route("/api/bluetooth", get(api_bluetooth))
@@ -92,10 +110,47 @@ async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
+async fn api_live_sse(State(st): State<AppState>) -> impl IntoResponse {
+    let Some(live_tx) = st.live_tx.clone() else {
+        return (
+            StatusCode::NOT_FOUND,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            "Flux temps réel indisponible (lancez rusthome serve avec le broker MQTT intégré).\n",
+        )
+            .into_response();
+    };
+
+    let rx = live_tx.subscribe();
+    let stream = BroadcastStream::new(rx).map(|item| {
+        match item {
+            Ok(()) => (),
+            Err(BroadcastStreamRecvError::Lagged(_)) => (),
+        }
+        Ok::<Event, Infallible>(Event::default().data("{}"))
+    });
+
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(25))
+            .text("ping"),
+    )
+    .into_response()
+}
+
 async fn serve_app_css() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
         include_str!("../static/app.css"),
+    )
+}
+
+async fn serve_common_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        include_str!("../static/common.js"),
     )
 }
 
@@ -178,6 +233,7 @@ async fn page_dashboard(State(st): State<AppState>) -> impl IntoResponse {
         &summary,
         &sensors,
         broker_available,
+        st.live_tx.is_some(),
     );
     Html(html).into_response()
 }

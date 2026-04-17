@@ -1,18 +1,31 @@
 (function () {
   const cfgEl = document.getElementById('rh-dashboard-config');
-  const cfg = cfgEl ? JSON.parse(cfgEl.textContent) : { journalLimit: 40, brokerAvailable: false };
-  const journalLimit = cfg.journalLimit;
+  const cfg = cfgEl
+    ? JSON.parse(cfgEl.textContent)
+    : { journalLimit: 40, brokerAvailable: false, livePush: false };
+  const journalLimitDefault = typeof cfg.journalLimit === 'number' ? cfg.journalLimit : 40;
   const brokerAvailable = !!cfg.brokerAvailable;
+  const livePush = !!cfg.livePush;
+
+  function currentJournalLimit() {
+    return typeof window.rhGetJournalLimit === 'function'
+      ? window.rhGetJournalLimit(journalLimitDefault)
+      : journalLimitDefault;
+  }
 
   const $ = (id) => document.getElementById(id);
   const errEl = $('error-bar');
   const toastEl = $('command-toast');
+  const btnRefresh = $('btn-refresh');
+  const brokerPill = document.getElementById('broker-pill');
+  const updatedEl = $('updated-at');
   let timer = null;
   let toastHideTimer = null;
+  let consecutiveFails = 0;
 
   if (brokerAvailable) {
     const hdr = $('action-hdr');
-    if (hdr) hdr.textContent = 'Action';
+    if (hdr) hdr.textContent = 'Commande';
   }
 
   function showToast(msg) {
@@ -49,7 +62,7 @@
       td.colSpan = cols;
       td.className = 'cell-empty';
       const em = document.createElement('em');
-      em.textContent = 'No rooms in projection yet';
+      em.textContent = 'Aucune pièce dans la projection';
       td.appendChild(em);
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -62,7 +75,7 @@
       const badge = document.createElement('span');
       const on = !!lights[room];
       badge.className = 'badge ' + (on ? 'on' : 'off');
-      badge.textContent = on ? 'On' : 'Off';
+      badge.textContent = on ? 'Allumée' : 'Éteinte';
       tdState.appendChild(badge);
       const tdProv = document.createElement('td');
       tdProv.className = 'col-prov';
@@ -72,12 +85,15 @@
       tr.appendChild(tdProv);
       if (brokerAvailable) {
         const tdAction = document.createElement('td');
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn-toggle';
-        btn.textContent = on ? 'Turn Off' : 'Turn On';
-        btn.addEventListener('click', () => toggleLight(room, on));
-        tdAction.appendChild(btn);
+        const sw = document.createElement('button');
+        sw.type = 'button';
+        sw.className = 'light-switch';
+        sw.setAttribute('role', 'switch');
+        sw.setAttribute('aria-checked', on ? 'true' : 'false');
+        sw.setAttribute('aria-label', 'Lumière ' + room + ', ' + (on ? 'allumée' : 'éteinte'));
+        sw.dataset.room = room;
+        sw.dataset.on = on ? 'true' : 'false';
+        tdAction.appendChild(sw);
         tr.appendChild(tdAction);
       }
       tbody.appendChild(tr);
@@ -101,7 +117,7 @@
       td.colSpan = 3;
       td.className = 'cell-empty';
       const em = document.createElement('em');
-      em.textContent = 'No sensor data yet';
+      em.textContent = 'Aucune donnée capteur';
       td.appendChild(em);
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -120,7 +136,7 @@
       tdVal.appendChild(b);
       const tdType = document.createElement('td');
       tdType.className = 'col-prov';
-      tdType.textContent = 'temperature';
+      tdType.textContent = 'température';
       tr.appendChild(tdName);
       tr.appendChild(tdVal);
       tr.appendChild(tdType);
@@ -136,7 +152,7 @@
       const b = document.createElement('span');
       const isOpen = !!contacts[id];
       b.className = 'badge ' + (isOpen ? 'badge-obs' : 'badge-fact');
-      b.textContent = isOpen ? 'Open' : 'Closed';
+      b.textContent = isOpen ? 'Ouvert' : 'Fermé';
       tdVal.appendChild(b);
       const tdType = document.createElement('td');
       tdType.className = 'col-prov';
@@ -156,10 +172,10 @@
     const contacts = st.contacts || {};
     const sensorCount = Object.keys(temps).length + Object.keys(contacts).length;
     $('summary-bar').innerHTML =
-      '<div class="summary-card"><span class="summary-icon">\uD83C\uDFE0</span><span class="summary-value">' + rooms.length + '</span><span class="summary-label">Rooms</span></div>' +
-      '<div class="summary-card"><span class="summary-icon">\uD83D\uDCA1</span><span class="summary-value">' + lightsOn + '/' + rooms.length + '</span><span class="summary-label">Lights On</span></div>' +
-      '<div class="summary-card"><span class="summary-icon">\uD83C\uDF21\uFE0F</span><span class="summary-value">' + sensorCount + '</span><span class="summary-label">Sensors</span></div>' +
-      '<div class="summary-card" id="summary-events"><span class="summary-icon">\uD83D\uDCCB</span><span class="summary-value">-</span><span class="summary-label">Events</span></div>';
+      '<div class="summary-card"><span class="summary-icon">\uD83C\uDFE0</span><span class="summary-value">' + rooms.length + '</span><span class="summary-label">Pièces</span></div>' +
+      '<div class="summary-card"><span class="summary-icon">\uD83D\uDCA1</span><span class="summary-value">' + lightsOn + '/' + rooms.length + '</span><span class="summary-label">Lampes</span></div>' +
+      '<div class="summary-card"><span class="summary-icon">\uD83C\uDF21\uFE0F</span><span class="summary-value">' + sensorCount + '</span><span class="summary-label">Capteurs</span></div>' +
+      '<div class="summary-card" id="summary-events"><span class="summary-icon">\uD83D\uDCCB</span><span class="summary-value">-</span><span class="summary-label">Événements</span></div>';
   }
 
   function renderJournal(lines) {
@@ -171,7 +187,7 @@
       td.colSpan = 3;
       td.className = 'cell-empty';
       const em = document.createElement('em');
-      em.textContent = 'Journal is empty';
+      em.textContent = 'Le journal est vide';
       td.appendChild(em);
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -211,56 +227,89 @@
       if (!res.ok) {
         const msg = await res.text();
         errEl.textContent = res.status === 503
-          ? 'Broker unavailable (start with rusthome serve for commands). ' + msg
-          : 'Command failed: ' + msg;
+          ? 'Broker indisponible (utilisez rusthome serve pour les commandes). ' + msg
+          : 'Échec de la commande : ' + msg;
         errEl.classList.add('visible');
         return;
       }
-      showToast('Command published to MQTT');
+      showToast('Commande publiée sur MQTT');
       setTimeout(refresh, 300);
     } catch (e) {
-      errEl.textContent = 'Command failed: ' + (e && e.message ? e.message : e);
+      errEl.textContent = 'Échec de la commande : ' + (e && e.message ? e.message : e);
       errEl.classList.add('visible');
     }
   }
 
-  document.addEventListener('click', function (e) {
-    const btn = e.target.closest('#lights-body .btn-toggle[data-room]');
-    if (!btn || !brokerAvailable) return;
-    const room = btn.getAttribute('data-room');
+  document.getElementById('lights-body')?.addEventListener('click', function (e) {
+    const sw = e.target.closest('.light-switch');
+    if (!sw || !brokerAvailable) return;
+    const room = sw.getAttribute('data-room');
     if (room == null) return;
-    const on = btn.getAttribute('data-on') === 'true';
+    const on = sw.getAttribute('data-on') === 'true';
     toggleLight(room, on);
   });
 
   async function refresh() {
     errEl.classList.remove('visible');
     errEl.textContent = '';
+    if (btnRefresh) btnRefresh.classList.add('is-loading');
+    if (brokerPill) brokerPill.classList.add('is-syncing');
     try {
       const [stRes, jrRes] = await Promise.all([
         fetch('/api/state'),
-        fetch('/api/journal?limit=' + journalLimit)
+        fetch('/api/journal?limit=' + currentJournalLimit())
       ]);
       if (!stRes.ok) throw new Error(await stRes.text());
       if (!jrRes.ok) throw new Error(await jrRes.text());
       renderState(await stRes.json());
       renderJournal(await jrRes.json());
-      $('updated-at').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      consecutiveFails = 0;
+      if (updatedEl) {
+        updatedEl.classList.remove('is-offline');
+        updatedEl.textContent = 'Mis à jour : ' + new Date().toLocaleTimeString('fr-FR');
+      }
     } catch (e) {
-      errEl.textContent = 'Refresh failed: ' + (e && e.message ? e.message : e);
+      consecutiveFails++;
+      errEl.textContent = 'Actualisation impossible : ' + (e && e.message ? e.message : e);
       errEl.classList.add('visible');
+      if (updatedEl) {
+        if (consecutiveFails >= 2) updatedEl.classList.add('is-offline');
+        updatedEl.textContent = consecutiveFails >= 2          ? 'Hors ligne ou erreur répétée'
+          : 'Erreur : ' + new Date().toLocaleTimeString('fr-FR');
+      }
+    } finally {
+      if (btnRefresh) btnRefresh.classList.remove('is-loading');
+      if (brokerPill) brokerPill.classList.remove('is-syncing');
     }
   }
 
   function schedule() {
     if (timer) clearInterval(timer);
     timer = null;
-    if ($('auto-refresh').checked)
-      timer = setInterval(refresh, 4000);
+    const ms = typeof window.rhGetRefreshIntervalMs === 'function'
+      ? window.rhGetRefreshIntervalMs()
+      : 4000;
+    if (ms > 0) timer = setInterval(refresh, ms);
   }
 
   $('btn-refresh').addEventListener('click', () => refresh());
-  $('auto-refresh').addEventListener('change', schedule);
+  window.addEventListener('rh-refresh-interval-changed', schedule);
+  window.addEventListener('rh-journal-limit-changed', () => refresh());
   schedule();
   refresh();
+
+  if (livePush && typeof EventSource !== 'undefined') {
+    let liveDebounce = null;
+    const es = new EventSource('/api/live');
+    es.onmessage = function () {
+      if (liveDebounce) clearTimeout(liveDebounce);
+      liveDebounce = setTimeout(function () {
+        refresh();
+        liveDebounce = null;
+      }, 80);
+    };
+    es.onerror = function () {
+      /* navigateur reconnecte automatiquement ; polling reste actif */
+    };
+  }
 })();
