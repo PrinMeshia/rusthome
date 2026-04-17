@@ -8,6 +8,7 @@ Index of files under `docs/` — avoid duplicating detail in the root [README](.
 | [user-rules.md](user-rules.md) | Presets, `rusthome.toml`, extending `Rule` / `Registry`, DSL–WASM ideas |
 | [onboarding-rules.md](onboarding-rules.md) | How to add a rule (boot, graph, §6.18) |
 | [rules-changelog.md](rules-changelog.md) | Digests `rules-v0` / `rules-home` / `rules-minimal` and schema evolution |
+| [schema-migration.md](schema-migration.md) | Sketch: bumping `schema_version`, offline JSONL migration |
 | [errors.md](errors.md) | Taxonomy: domain / pipeline / infra errors (§14.6–14.8) |
 | [reconciliation.md](reconciliation.md) | Journal ↔ world, Observed / Derived (§14.7) |
 | [integration.md](integration.md) | Edge adapters, examples, `rusthome serve` / `rusthome-web` lab UI, CLI vs library |

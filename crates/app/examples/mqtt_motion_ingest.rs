@@ -1,9 +1,14 @@
-//! Subscribe to an **external** MQTT broker and ingest observations (adapter template).
+//! Subscribe to an **external** MQTT broker and ingest MQTT publishes (adapter template).
 //!
-//! Supports all observation types dispatched by [`rusthome_app::mqtt_ingest`]:
+//! Uses [`rusthome_app::mqtt_ingest::dispatch_mqtt_publish`] for both observations and commands:
 //! - `sensors/motion/{room}` → `MotionDetected`
 //! - `sensors/temperature/{sensor_id}` → `TemperatureReading`
 //! - `sensors/contact/{sensor_id}` → `ContactChanged`
+//! - `commands/light/{room}/on|off` → `TurnOnLight` / `TurnOffLight`
+//!
+//! One process handles one `--topic` filter; subscribe to `sensors/#` for sensors, or run a
+//! second instance with `--topic 'commands/#'` for light commands (or extend this example with
+//! multiple subscriptions).
 //!
 //! ```text
 //! cargo run -p rusthome-app --example mqtt_motion_ingest -- \

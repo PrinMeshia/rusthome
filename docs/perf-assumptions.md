@@ -76,3 +76,17 @@ bash scripts/mqtt-p95.sh 10 20
 At ~7 ms per event (median), the adapter sustains **~140 events/s** — well above the peak hypothesis (20 events/s). The p95 per-event latency (10 ms) stays 3 orders of magnitude below `max_wall_ms_per_run`.
 
 The MQTT path adds minimal overhead vs the synthetic bench: the per-event cost is comparable to `bench --count 50` on the same hardware, confirming that network transport (local Mosquitto) is not a bottleneck.
+
+## Multi-rule property tests (wall-clock p95)
+
+The §6.18 oscillation and determinism proptests exercise a **richer rule graph** (deep cascade, `RunLimits` including `max_pending_events`) than the CLI `bench` subcommand. They are not a substitute for ingest throughput measurement, but they are useful **regression guards** on the Pi: if the suite suddenly slows, investigate rule or pipeline changes.
+
+```bash
+bash scripts/proptest-suite-p95.sh 10
+```
+
+This runs `cargo test -p rusthome-app --test oscillation_proptest --test determinism_proptest --release` repeatedly and prints min / median / p95 / max of **total wall time** per run (seconds of real time, reported as integer ms). Record **machine model**, **date**, and **`git rev-parse HEAD`** when adding a row to the table below.
+
+| Git revision | Hardware | Runs | Median (ms) | p95 (ms) | Notes |
+|--------------|----------|------|-------------|----------|-------|
+| *(fill on next Pi run)* | Raspberry Pi 4 (`aarch64`) | 10 | | | After changes to `crates/app/src/pipeline.rs` or `crates/app/tests/oscillation_proptest.rs` |

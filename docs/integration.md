@@ -13,8 +13,8 @@ The FIFO engine does **not** read sensors or the network. A separate **adapter**
 | **Library** `rusthome_app::ingest_observation_with_causal` | Push `Observation` events (e.g. motion) with your own `causal_chain_id` |
 | **Library** `rusthome_app::ingest_command_with_causal` | Push `Command` lines (e.g. `TurnOffLight` from a switch adapter) with your own `causal_chain_id` |
 | **Library** `rusthome_app::rusthome_file` | Load / validate `{data-dir}/rusthome.toml` — same helpers as the CLI (`load_rusthome_file`, `resolve_rules_preset`, `build_runtime_config`, `build_run_limits`) |
-| **Library** `rusthome_app::mqtt_ingest` | MQTT topic → `ObservationEvent` dispatch (`MotionDetected`, `TemperatureReading`, `ContactChanged`); used by `rusthome serve` and the standalone adapter |
-| Example [`mqtt_motion_ingest`](../crates/app/examples/mqtt_motion_ingest.rs) | MQTT subscriber for external brokers → `dispatch_mqtt_publish`; `rumqttc` with `default-features = false` (plain TCP) |
+| **Library** `rusthome_app::mqtt_ingest` | MQTT topic → [`dispatch_mqtt_publish`](../crates/app/src/mqtt_ingest.rs): observations **and** `commands/light/...` → `TurnOnLight` / `TurnOffLight`; used by `rusthome serve` and the standalone adapter |
+| Example [`mqtt_motion_ingest`](../crates/app/examples/mqtt_motion_ingest.rs) | MQTT subscriber for external brokers → `dispatch_mqtt_publish` (subscribe to `sensors/#` and/or `commands/#`) |
 
 ## Example binaries (templates)
 
@@ -43,15 +43,23 @@ cargo run -p rusthome-app --example ingest_turn_off -- \
 
 ### MQTT adapter ([`mqtt_motion_ingest.rs`](../crates/app/examples/mqtt_motion_ingest.rs))
 
-Standalone adapter for connecting to an **external** MQTT broker. Supports all observation types via the shared [`mqtt_ingest`](../crates/app/src/mqtt_ingest.rs) module (motion, temperature, contact).
+Standalone adapter for connecting to an **external** MQTT broker. Uses the shared [`mqtt_ingest::dispatch_mqtt_publish`](../crates/app/src/mqtt_ingest.rs) entry point:
+
+- **Observations**: `sensors/motion/...`, `sensors/temperature/...`, `sensors/contact/...`
+- **Commands**: `commands/light/{room}/on|off` → journal `CommandEvent` (same as the embedded ingest in `rusthome serve`)
 
 1. Same `rusthome.toml` loading and journal replay as the other examples
-2. Subscribes with **`rumqttc`** (TCP; optional `--mqtt-user` / `--mqtt-password`)
-3. Each publish → `dispatch_mqtt_publish` which classifies the topic and ingests the appropriate observation
+2. Subscribes with **`rumqttc`** (TCP; optional `--mqtt-user` / `--mqtt-password`). Use **`--topic`** for each subscription you need; for both sensors and commands, run **two** processes or extend the example to subscribe to multiple filters (e.g. `sensors/#` and `commands/#`).
+3. Each publish → `dispatch_mqtt_publish`, which ingests an observation, a command, or skips unknown topics
 
 ```bash
+# Observations only (typical bridge / Zigbee2MQTT prefix)
 cargo run -p rusthome-app --example mqtt_motion_ingest -- \
   --data-dir data --broker 127.0.0.1 --port 1883 --topic 'sensors/#'
+
+# Light commands from another system (e.g. Home Assistant → MQTT)
+cargo run -p rusthome-app --example mqtt_motion_ingest -- \
+  --data-dir data --broker 127.0.0.1 --port 1883 --topic 'commands/#'
 ```
 
 For most deployments, prefer `rusthome serve` (embedded broker) instead. This example is useful when connecting to a broker you already run externally.
@@ -70,13 +78,21 @@ External sensors (Zigbee2MQTT, Tasmota, etc.) connect to the embedded broker ove
 
 ### Supported MQTT topics
 
-| Pattern | Observation |
+| Pattern | Ingested as |
 |---|---|
-| `sensors/motion/{room}` | `MotionDetected` |
-| `sensors/temperature/{sensor_id}` | `TemperatureReading` |
-| `sensors/contact/{sensor_id}` | `ContactChanged` |
+| `sensors/motion/{room}` | `ObservationEvent::MotionDetected` |
+| `sensors/temperature/{sensor_id}` | `ObservationEvent::TemperatureReading` |
+| `sensors/contact/{sensor_id}` | `ObservationEvent::ContactChanged` |
+| `commands/light/{room}/on` | `CommandEvent::TurnOnLight` |
+| `commands/light/{room}/off` | `CommandEvent::TurnOffLight` |
 
-Payload: plain UTF-8 entity name, or JSON (see [`mqtt_ingest`](../crates/app/src/mqtt_ingest.rs) for details).
+Payload: plain UTF-8 entity name, or JSON (see [`mqtt_ingest`](../crates/app/src/mqtt_ingest.rs) for details). Command topics ignore payload for classification (empty payload is fine).
+
+**Subscriptions in `rusthome serve`**: the ingest link subscribes to **`--mqtt-topic`** (default `sensors/#`) **and** always subscribes to **`commands/#`**, so light commands published by the web UI or external clients are ingested without extra flags.
+
+### Web UI → MQTT → journal
+
+When the embedded broker is active, the dashboard can POST to **`/api/command`** with JSON `{"action":"turn_on"|"turn_off","room":"<room>"}`. The server publishes to `commands/light/<room>/on` or `.../off`; the ingest loop receives those publishes and appends the corresponding command lines. If the broker is disabled (`--no-broker`), `POST /api/command` returns **503**.
 
 ### CLI flags
 
@@ -123,7 +139,7 @@ Examples and custom adapters should call **`rusthome_app::rusthome_file`** (same
 
 ## Web dashboard (lab)
 
-`rusthome serve` (or the `rusthome-web` binary) replays the same `events.jsonl` as `rusthome state` and serves a minimal HTML page plus JSON APIs. Use the **same `--data-dir`** as other subcommands. See [implementation.md — rusthome-web](implementation.md#rusthome-web-read-only-ui).
+`rusthome serve` (or the `rusthome-web` binary) replays the same `events.jsonl` as `rusthome state` and serves a minimal HTML page plus JSON APIs (`/api/state`, `/api/journal`, `/api/command` when the broker is present). Use the **same `--data-dir`** as other subcommands. See [implementation.md — rusthome-web](implementation.md#rusthome-web-read-only-ui).
 
 There is **no authentication**. Keep the default **`127.0.0.1`** bind for local use; if you listen on all interfaces or a LAN IP, put **TLS + access control** (reverse proxy) in front — the HTML pages show a warning when the bind is not loopback-only. Step-by-step: [web-proxy.md](web-proxy.md).
 

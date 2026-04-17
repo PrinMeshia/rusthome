@@ -193,6 +193,33 @@ fn run_deep_chain(
     (state, raw, results)
 }
 
+/// One `MotionDetected` through [`deep_registry`] with explicit [`RunLimits`].
+///
+/// Exercises §6.6 caps including `max_pending_events` (queue depth vs
+/// [`RunError::QueueCapacityExceeded`]) on a rich multi-rule graph.
+fn run_deep_single_motion(room: &str, limits: RunLimits) -> (State, String, Result<(), RunError>) {
+    let (_dir, path) = common::temp_events_jsonl();
+    let mut journal = Journal::open(&path).unwrap();
+    let mut state = State::new();
+    let reg = deep_registry();
+    reg.validate_boot().unwrap();
+    let cfg = ConfigSnapshot::default();
+    let res = ingest_observation_with_causal(
+        &mut journal,
+        &mut state,
+        &reg,
+        &cfg,
+        0,
+        ObservationEvent::MotionDetected {
+            room: room.to_string(),
+        },
+        Uuid::from_u128(0xDEE9_0000_0000_0001),
+        limits,
+    );
+    let raw = std::fs::read_to_string(&path).unwrap();
+    (state, raw, res)
+}
+
 fn run_deep_chain_limited(
     max_run: u64,
     max_gen: u64,
@@ -333,5 +360,21 @@ proptest! {
         for (a, b) in r1.iter().zip(r2.iter()) {
             prop_assert_eq!(a, b);
         }
+    }
+
+    /// `max_pending_events` caps the FIFO queue during the deep cascade; whether the
+    /// run completes or returns `QueueCapacityExceeded`, the outcome matches across runs.
+    #[test]
+    fn deep_chain_pending_limit_determinism(max_pending in 3usize..120usize) {
+        let limits = RunLimits {
+            max_pending_events: max_pending,
+            ..RunLimits::default()
+        };
+        let (s1, j1, r1) = run_deep_single_motion("pend-det-room", limits.clone());
+        let (s2, j2, r2) = run_deep_single_motion("pend-det-room", limits);
+
+        prop_assert_eq!(&s1, &s2);
+        prop_assert_eq!(&j1, &j2);
+        prop_assert_eq!(&r1, &r2);
     }
 }
