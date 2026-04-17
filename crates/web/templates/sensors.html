@@ -4,155 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>rusthome — Sensors</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #0e1116;
-      --surface: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --link: #58a6ff;
-      --fact: #58a6ff;
-      --fact-bg: #388bfd26;
-      --obs: #3fb950;
-      --obs-bg: #23863626;
-      --err-bg: #f8514918;
-      --err-border: #f8514966;
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        color-scheme: light;
-        --bg: #f6f8fa;
-        --surface: #ffffff;
-        --border: #d0d7de;
-        --text: #1f2328;
-        --muted: #656d76;
-        --link: #0969da;
-        --fact: #0969da;
-        --fact-bg: #ddf4ff;
-        --obs: #1a7f37;
-        --obs-bg: #dafbe1;
-        --err-bg: #ffebe9;
-        --err-border: #ff818266;
-      }
-    }
-    * { box-sizing: border-box; }
-    body {
-      font-family: ui-sans-serif, system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      margin: 0;
-      line-height: 1.5;
-      min-height: 100vh;
-    }
-    .wrap { max-width: 64rem; margin: 0 auto; padding: 1.25rem 1.25rem 2rem; }
-    header {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 0.5rem 1rem;
-      margin-bottom: 0.25rem;
-    }
-    header h1 { font-size: 1.35rem; font-weight: 650; letter-spacing: -0.02em; margin: 0; }
-    .tagline { color: var(--muted); font-size: 0.9rem; }
-    nav.links { margin: 0.35rem 0 0; font-size: 0.875rem; }
-    nav.links a { color: var(--link); text-decoration: none; margin-right: 1rem; }
-    nav.links a:hover { text-decoration: underline; }
-    nav.links span.current { color: var(--muted); margin-right: 1rem; }
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.75rem 1.25rem;
-      margin: 1rem 0 1.25rem;
-      padding: 0.65rem 0.85rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-    }
-    button {
-      font: inherit;
-      cursor: pointer;
-      padding: 0.35rem 0.75rem;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text);
-    }
-    button:hover { filter: brightness(1.08); }
-    button:active { transform: scale(0.98); }
-    .toolbar label { font-size: 0.875rem; color: var(--muted); display: inline-flex; align-items: center; gap: 0.35rem; }
-    #updated-at { font-size: 0.8rem; color: var(--muted); margin-left: auto; }
-    .security-banner {
-      margin-bottom: 1rem;
-      padding: 0.65rem 0.85rem;
-      border-radius: 8px;
-      font-size: 0.88rem;
-      line-height: 1.45;
-      border: 1px solid #a371f7;
-      background: rgba(163, 113, 247, 0.12);
-    }
-    .security-banner code { font-size: 0.85em; }
-    @media (prefers-color-scheme: light) {
-      .security-banner {
-        border-color: #8250df;
-        background: #fbefff;
-      }
-    }
-    .grid {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: 1fr;
-    }
-    @media (min-width: 52rem) {
-      .grid { grid-template-columns: 1fr 1fr; align-items: start; }
-    }
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.85rem 1rem 1rem;
-    }
-    .card h2 {
-      font-size: 0.78rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      margin: 0 0 0.65rem;
-    }
-    table.data { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
-    .data th, .data td { border-bottom: 1px solid var(--border); padding: 0.5rem 0.45rem; text-align: left; vertical-align: middle; }
-    .data thead th { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border-bottom-width: 2px; }
-    .data tbody tr:last-child td { border-bottom: none; }
-    .cell-empty { color: var(--muted); text-align: center; padding: 1rem !important; }
-    .col-room { font-weight: 500; }
-    .badge {
-      display: inline-block;
-      font-size: 0.72rem;
-      font-weight: 650;
-      letter-spacing: 0.04em;
-      padding: 0.2rem 0.5rem;
-      border-radius: 999px;
-    }
-    .badge-fact { color: var(--fact); background: var(--fact-bg); }
-    .badge-obs { color: var(--obs); background: var(--obs-bg); }
-    @media (prefers-reduced-motion: reduce) {
-      button:active { transform: none; }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/app.css">
 </head>
-<body>
+<body class="page-sensors">
   <div class="wrap">
     %%SECURITY_BANNER%%
+    <div id="error-bar" role="alert"></div>
     <header>
       <h1>rusthome</h1>
       <span class="tagline">sensors</span>
     </header>
     <nav class="links">
       <a href="/">Dashboard</a>
-      <span class="current">Sensors</span>
+      <span class="nav-current">Sensors</span>
       <a href="/system">System</a>
       <a href="/api/state">JSON state</a>
     </nav>
@@ -178,103 +42,6 @@
       </section>
     </div>
   </div>
-  <script>
-(function () {
-  const $ = (id) => document.getElementById(id);
-  let timer = null;
-
-  function fmtCelsius(millideg) {
-    return (millideg / 1000).toFixed(1) + '\u00B0C';
-  }
-
-  function renderSensors(st) {
-    const tempBody = $('temp-body');
-    tempBody.replaceChildren();
-    const temps = st.temperatures || {};
-    const tempKeys = Object.keys(temps).sort();
-    if (tempKeys.length === 0) {
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = 2;
-      td.className = 'cell-empty';
-      const em = document.createElement('em');
-      em.textContent = 'No temperature sensors yet';
-      td.appendChild(em);
-      tr.appendChild(td);
-      tempBody.appendChild(tr);
-    } else {
-      for (const id of tempKeys) {
-        const tr = document.createElement('tr');
-        const tdName = document.createElement('td');
-        tdName.className = 'col-room';
-        tdName.textContent = '\uD83C\uDF21\uFE0F ' + id;
-        const tdVal = document.createElement('td');
-        const b = document.createElement('span');
-        b.className = 'badge badge-fact';
-        b.textContent = fmtCelsius(temps[id]);
-        tdVal.appendChild(b);
-        tr.appendChild(tdName);
-        tr.appendChild(tdVal);
-        tempBody.appendChild(tr);
-      }
-    }
-
-    const contactBody = $('contact-body');
-    contactBody.replaceChildren();
-    const contacts = st.contacts || {};
-    const contactKeys = Object.keys(contacts).sort();
-    if (contactKeys.length === 0) {
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = 2;
-      td.className = 'cell-empty';
-      const em = document.createElement('em');
-      em.textContent = 'No contact sensors yet';
-      td.appendChild(em);
-      tr.appendChild(td);
-      contactBody.appendChild(tr);
-    } else {
-      for (const id of contactKeys) {
-        const tr = document.createElement('tr');
-        const tdName = document.createElement('td');
-        tdName.className = 'col-room';
-        tdName.textContent = '\uD83D\uDEAA ' + id;
-        const tdVal = document.createElement('td');
-        const b = document.createElement('span');
-        const isOpen = !!contacts[id];
-        b.className = 'badge ' + (isOpen ? 'badge-obs' : 'badge-fact');
-        b.textContent = isOpen ? 'Open' : 'Closed';
-        tdVal.appendChild(b);
-        tr.appendChild(tdName);
-        tr.appendChild(tdVal);
-        contactBody.appendChild(tr);
-      }
-    }
-  }
-
-  async function refresh() {
-    try {
-      const res = await fetch('/api/state');
-      if (!res.ok) throw new Error(await res.text());
-      renderSensors(await res.json());
-      $('updated-at').textContent = 'Updated ' + new Date().toLocaleTimeString();
-    } catch (e) {
-      console.error('Refresh failed:', e);
-    }
-  }
-
-  function schedule() {
-    if (timer) clearInterval(timer);
-    timer = null;
-    if ($('auto-refresh').checked)
-      timer = setInterval(refresh, 4000);
-  }
-
-  $('btn-refresh').addEventListener('click', () => refresh());
-  $('auto-refresh').addEventListener('change', schedule);
-  schedule();
-  refresh();
-})();
-  </script>
+  <script src="/static/sensors.js" defer></script>
 </body>
 </html>

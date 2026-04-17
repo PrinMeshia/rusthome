@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
@@ -61,6 +61,10 @@ pub async fn run(
     };
 
     let app = Router::new()
+        .route("/static/app.css", get(serve_app_css))
+        .route("/static/dashboard.js", get(serve_dashboard_js))
+        .route("/static/sensors.js", get(serve_sensors_js))
+        .route("/static/system.js", get(serve_system_js))
         .route("/", get(page_dashboard))
         .route("/sensors", get(page_sensors))
         .route("/system", get(page_system))
@@ -86,6 +90,43 @@ pub async fn run(
 
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
+}
+
+async fn serve_app_css() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        include_str!("../static/app.css"),
+    )
+}
+
+async fn serve_dashboard_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        include_str!("../static/dashboard.js"),
+    )
+}
+
+async fn serve_sensors_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        include_str!("../static/sensors.js"),
+    )
+}
+
+async fn serve_system_js() -> impl IntoResponse {
+    (
+        [(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        include_str!("../static/system.js"),
+    )
 }
 
 fn journal_path(data_dir: &Path) -> PathBuf {

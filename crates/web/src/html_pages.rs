@@ -5,7 +5,7 @@ use rusthome_core::State as CoreState;
 use crate::bluetooth_info;
 use crate::journal::JournalLineDto;
 use crate::system_info;
-use crate::util::esc_html;
+use crate::util::{esc_attr, esc_html};
 
 pub(crate) fn lights_rows_html(state: &CoreState, broker_available: bool) -> String {
     let mut rows_html = String::new();
@@ -24,12 +24,10 @@ pub(crate) fn lights_rows_html(state: &CoreState, broker_available: bool) -> Str
             let badge_text = if on { "On" } else { "Off" };
             let action_col = if broker_available {
                 let btn_text = if on { "Turn Off" } else { "Turn On" };
-                let action = if on { "turn_off" } else { "turn_on" };
                 format!(
-                    r#"<td><button class="btn-toggle" onclick="toggleLight('{room}',{on})"data-action="{action}">{btn_text}</button></td>"#,
-                    room = esc_html(&room),
-                    on = if on { "true" } else { "false" },
-                    action = action,
+                    r#"<td><button type="button" class="btn-toggle" data-room="{room}" data-on="{on_attr}">{btn_text}</button></td>"#,
+                    room = esc_attr(&room),
+                    on_attr = if on { "true" } else { "false" },
                     btn_text = btn_text,
                 )
             } else {
@@ -131,6 +129,16 @@ pub(crate) fn render_dashboard_page(
     sensors_rows: &str,
     broker_available: bool,
 ) -> String {
+    let dashboard_cfg = format!(
+        r#"{{"journalLimit":{},"brokerAvailable":{}}}"#,
+        DASHBOARD_JOURNAL_ROWS,
+        if broker_available { "true" } else { "false" }
+    );
+    let broker_pill = if broker_available {
+        r#"<span class="broker-pill broker-ok" title="Embedded MQTT broker: light commands enabled">MQTT ready</span>"#
+    } else {
+        r#"<span class="broker-pill broker-off" title="No broker: use rusthome serve to publish commands">Read-only</span>"#
+    };
     include_str!("../templates/dashboard.html")
         .replace("%%SECURITY_BANNER%%", security_banner)
         .replace("%%JOURNAL_PATH%%", journal_path_display)
@@ -138,11 +146,8 @@ pub(crate) fn render_dashboard_page(
         .replace("%%JOURNAL_ROWS%%", journal_rows)
         .replace("%%SUMMARY_CARDS%%", summary_cards)
         .replace("%%SENSORS_ROWS%%", sensors_rows)
-        .replace("%%JOURNAL_LIMIT%%", &DASHBOARD_JOURNAL_ROWS.to_string())
-        .replace(
-            "%%BROKER_AVAILABLE%%",
-            if broker_available { "true" } else { "false" },
-        )
+        .replace("%%RH_DASHBOARD_CONFIG%%", &dashboard_cfg)
+        .replace("%%BROKER_PILL%%", broker_pill)
 }
 
 pub(crate) fn render_sensors_page(

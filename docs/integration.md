@@ -66,6 +66,8 @@ For most deployments, prefer `rusthome serve` (embedded broker) instead. This ex
 
 Extend these with your transport; keep **domain logic** in rules, **I/O** in the adapter.
 
+**GPIO / shell / cron**: schedule a small program or script that invokes the same library helpers as the examples (e.g. `append_observed_light_fact` after a GPIO edge, or `ingest_command_with_causal` from a switch daemon). Reuse `rusthome_file` for config parity with the CLI.
+
 ## All-in-one deployment (`rusthome serve`)
 
 `rusthome serve` runs **three components in a single process**:

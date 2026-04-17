@@ -59,6 +59,10 @@ The p95 for `count=200` (3140 ms) is well within the `max_wall_ms_per_run` defau
 
 **Conclusion**: at `count=200` on a Pi 4, the benchmark p95 stays under 4 s, roughly 10× below the default budget. No adjustment to `RunLimits::max_wall_ms_per_run` is needed for this workload.
 
+### Spot check (2026-04-17, informal)
+
+Single release run on the lab Pi after routine development: `rusthome bench --count 50` reported `elapsed_ms=139`. This is **not** a p95 (one sample only); use `scripts/bench-p95.sh` for proper statistics.
+
 ## MQTT end-to-end p95 (`mqtt-p95.sh`)
 
 Raspberry Pi 4 Model B Rev 1.4 (`aarch64`), release build, Mosquitto 2.0 local broker, 2026-04-15.
@@ -90,3 +94,4 @@ This runs `cargo test -p rusthome-app --test oscillation_proptest --test determi
 | Git revision | Hardware | Runs | Median (ms) | p95 (ms) | Notes |
 |--------------|----------|------|-------------|----------|-------|
 | *(fill on next Pi run)* | Raspberry Pi 4 (`aarch64`) | 10 | | | After changes to `crates/app/src/pipeline.rs` or `crates/app/tests/oscillation_proptest.rs` |
+| 2026-04-17 | Raspberry Pi (`aarch64`) | 5 | 938 | 1013 | `proptest-suite-p95.sh` after `rusthome-web` static CSS/JS split (informal; prefer 10+ runs for baselines) |
