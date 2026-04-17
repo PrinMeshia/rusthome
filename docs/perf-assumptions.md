@@ -94,4 +94,4 @@ This runs `cargo test -p rusthome-app --test oscillation_proptest --test determi
 | Git revision | Hardware | Runs | Median (ms) | p95 (ms) | Notes |
 |--------------|----------|------|-------------|----------|-------|
 | *(fill on next Pi run)* | Raspberry Pi 4 (`aarch64`) | 10 | | | After changes to `crates/app/src/pipeline.rs` or `crates/app/tests/oscillation_proptest.rs` |
-| 2026-04-17 | Raspberry Pi (`aarch64`) | 5 | 938 | 1013 | `proptest-suite-p95.sh` after `rusthome-web` static CSS/JS split (informal; prefer 10+ runs for baselines) |
+| `main` @ 2026-04-17 | Raspberry Pi (`aarch64`) | 5 | 938 | 1013 | `proptest-suite-p95.sh` after `rusthome-web` static CSS/JS split (informal; prefer 10+ runs for baselines) |
