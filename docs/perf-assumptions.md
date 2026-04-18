@@ -1,6 +1,6 @@
 # Performance assumptions (plan §7.1)
 
-See [implementation.md](implementation.md) for the current technical scope of the binary and crates.
+See [implementation.md](implementation.md) for the current technical scope of the binary and crates. Routine regression commands: [testing-core.md](testing-core.md).
 
 Target hardware: Raspberry Pi class (lab reference).
 
@@ -93,5 +93,5 @@ This runs `cargo test -p rusthome-app --test oscillation_proptest --test determi
 
 | Git revision | Hardware | Runs | Median (ms) | p95 (ms) | Notes |
 |--------------|----------|------|-------------|----------|-------|
-| *(fill on next Pi run)* | Raspberry Pi 4 (`aarch64`) | 10 | | | After changes to `crates/app/src/pipeline.rs` or `crates/app/tests/oscillation_proptest.rs` |
+| `d6fe95e6648022ffad59e2ebd3f7340cc3a7b1b0` | Raspberry Pi (`aarch64`) | 5 | 1333 | 2551 | `proptest-suite-p95.sh`; high run-to-run variance (cold cache / link) — use **10+ runs** for baselines |
 | `main` @ 2026-04-17 | Raspberry Pi (`aarch64`) | 5 | 938 | 1013 | `proptest-suite-p95.sh` after `rusthome-web` static CSS/JS split (informal; prefer 10+ runs for baselines) |

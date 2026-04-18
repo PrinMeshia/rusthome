@@ -6,6 +6,7 @@ use crate::bluetooth_info;
 use crate::journal::JournalLineDto;
 use crate::system_info;
 use crate::util::{esc_attr, esc_html};
+use rusthome_app::rusthome_file::Zigbee2MqttConfig;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NavPage {
@@ -73,6 +74,7 @@ pub(crate) fn dev_footer_system() -> String {
         ("/api/bluetooth", "Bluetooth JSON"),
         ("/api/bluetooth/device?addr=…&scan=10", "Présence MAC + scan opt."),
         ("/api/bluetooth/info?addr=…", "Infos bluetoothctl"),
+        ("/api/zigbee2mqtt/permit_join", "POST permit join Z2M"),
         ("/api/health", "Santé"),
     ])
 }
@@ -481,11 +483,87 @@ pub(crate) fn bluetooth_rows_html(s: &bluetooth_info::BluetoothSnapshot) -> Stri
     rows
 }
 
+pub(crate) fn system_serial_rows_html(ports: &[system_info::SerialPortInfo]) -> String {
+    if ports.is_empty() {
+        return r#"<tr><td colspan="2" class="cell-empty"><em>Aucun port <code class="mono">ttyACM*</code> / <code class="mono">ttyUSB*</code> détecté. Branchez le dongle ou vérifiez les pilotes.</em></td></tr>"#
+            .to_string();
+    }
+    let mut rows = String::new();
+    for p in ports {
+        let vid_pid = match (&p.vendor_id, &p.product_id) {
+            (Some(v), Some(i)) => format!("0x{v} / 0x{i}"),
+            (Some(v), None) => format!("0x{v} / —"),
+            (None, Some(i)) => format!("— / 0x{i}"),
+            (None, None) => "—".to_string(),
+        };
+        let by_id = p
+            .by_id_name
+            .as_deref()
+            .map(esc_html)
+            .unwrap_or_else(|| "—".to_string());
+        let prod = p
+            .product_label
+            .as_deref()
+            .map(esc_html)
+            .unwrap_or_else(|| "—".to_string());
+        let mut extra = String::new();
+        if p.maybe_conbee_hint {
+            extra.push_str(r#" <span class="badge badge-fact" title="Vendor id 0x1CF1 — Dresden Elektronik (famille Conbee)">indice Conbee</span>"#);
+        }
+        if !p.notes.is_empty() {
+            extra.push_str(&format!(
+                r#" <span class="cell-muted">{}</span>"#,
+                esc_html(&p.notes.join(" · "))
+            ));
+        }
+        rows.push_str(&format!(
+            r#"<tr><th class="mono">{}</th><td>by-id: {} · VID/PID: {} · {} {}</td></tr>"#,
+            esc_html(&p.device),
+            by_id,
+            esc_html(&vid_pid),
+            prod,
+            extra,
+        ));
+    }
+    rows
+}
+
+pub(crate) fn zigbee2mqtt_panel_html(cfg: &Zigbee2MqttConfig, broker_available: bool) -> String {
+    let prefix = cfg.resolved_topic_prefix();
+    let prefix_esc = esc_html(&prefix);
+    let topic_esc = esc_html(&format!("{prefix}/bridge/request"));
+    let secs = cfg.resolved_permit_join_seconds();
+    let broker_note = if broker_available {
+        r#"<p class="bt-hint">Broker MQTT intégré : la requête est publiée sur le topic bridge Zigbee2MQTT.</p>"#
+    } else {
+        r#"<p class="bt-hint"><span class="badge badge-error">Broker indisponible</span> — lancez <code class="mono">rusthome serve</code> sans <code class="mono">--no-broker</code> pour publier vers Zigbee2MQTT.</p>"#
+    };
+    let disabled = if broker_available { "" } else { " disabled" };
+    format!(
+        r##"<section class="card wide z2m-card" id="z2m-section">
+  <h2>Zigbee2MQTT — appairage</h2>
+  {broker_note}
+  <p class="bt-hint">Préfixe MQTT : <code class="mono">{prefix_esc}</code> → <code class="mono">{topic_esc}</code>. Zigbee2MQTT doit être connecté au <strong>même broker</strong> que rusthome. Documentation : <span class="mono">docs/zigbee-conbee.md</span>.</p>
+  <div class="z2m-row">
+    <button type="button" id="z2m-permit-btn" class="bt-mac-btn"{disabled}>Autoriser l&apos;appairage ({secs} s)</button>
+    <span id="z2m-permit-status" class="cell-muted" role="status" aria-live="polite"></span>
+  </div>
+</section>"##,
+        broker_note = broker_note,
+        prefix_esc = prefix_esc,
+        topic_esc = topic_esc,
+        secs = secs,
+        disabled = disabled,
+    )
+}
+
 pub(crate) fn render_system_page(
     security_banner: &str,
     rusthome: &str,
     host: &str,
     resources: &str,
+    serial: &str,
+    zigbee2mqtt_panel: &str,
     bluetooth: &str,
 ) -> String {
     include_str!("../templates/system.html")
@@ -493,6 +571,8 @@ pub(crate) fn render_system_page(
         .replace("%%RUSTHOME_ROWS%%", rusthome)
         .replace("%%HOST_ROWS%%", host)
         .replace("%%RESOURCE_ROWS%%", resources)
+        .replace("%%SERIAL_ROWS%%", serial)
+        .replace("%%ZIGBEE2MQTT_PANEL%%", zigbee2mqtt_panel)
         .replace("%%BLUETOOTH_ROWS%%", bluetooth)
         .replace("%%MAIN_NAV%%", &main_nav_html(NavPage::System))
         .replace("%%DEV_FOOTER%%", &dev_footer_system())

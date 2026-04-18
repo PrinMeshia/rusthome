@@ -1,9 +1,25 @@
 //! Host and resource snapshot for the `/system` dashboard (read-only, lab UI).
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::Serialize;
 use sysinfo::{Components, Disk, Disks, System};
+
+/// USB serial adapter seen under `/dev` (Conbee and similar dongles often appear as `ttyACM*` / `ttyUSB*`).
+#[derive(Debug, Clone, Serialize)]
+pub struct SerialPortInfo {
+    pub device: String,
+    /// Stable name under `/dev/serial/by-id/` when available.
+    pub by_id_name: Option<String>,
+    pub vendor_id: Option<String>,
+    pub product_id: Option<String>,
+    pub product_label: Option<String>,
+    /// Heuristic: Dresden Elektronik USB vendor id (Conbee family).
+    pub maybe_conbee_hint: bool,
+    pub notes: Vec<String>,
+}
 
 /// Serializable snapshot for `/api/system` and the system HTML page.
 #[derive(Debug, Clone, Serialize)]
@@ -35,6 +51,8 @@ pub struct SystemSnapshot {
     pub disk_mount: Option<String>,
     pub disk_total_bytes: Option<u64>,
     pub disk_available_bytes: Option<u64>,
+    /// `ttyACM*` / `ttyUSB*` on Unix (best-effort udev metadata on Linux).
+    pub serial_ports: Vec<SerialPortInfo>,
 }
 
 pub fn capture(listen: &str, data_dir: &Path, journal_path: &Path) -> SystemSnapshot {
@@ -61,6 +79,8 @@ pub fn capture(listen: &str, data_dir: &Path, journal_path: &Path) -> SystemSnap
         Some((m, t, a)) => (Some(m), Some(t), Some(a)),
         None => (None, None, None),
     };
+
+    let serial_ports = list_serial_usb_devices();
 
     SystemSnapshot {
         rusthome_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -89,7 +109,115 @@ pub fn capture(listen: &str, data_dir: &Path, journal_path: &Path) -> SystemSnap
         disk_mount,
         disk_total_bytes,
         disk_available_bytes,
+        serial_ports,
     }
+}
+
+/// Lists `/dev/ttyACM*` and `/dev/ttyUSB*` with optional udev metadata (Linux).
+pub fn list_serial_usb_devices() -> Vec<SerialPortInfo> {
+    #[cfg(unix)]
+    {
+        list_serial_usb_devices_unix()
+    }
+    #[cfg(not(unix))]
+    {
+        Vec::new()
+    }
+}
+
+#[cfg(unix)]
+fn list_serial_usb_devices_unix() -> Vec<SerialPortInfo> {
+    let mut names: Vec<String> = Vec::new();
+    let Ok(rd) = std::fs::read_dir("/dev") else {
+        return Vec::new();
+    };
+    for e in rd.filter_map(|x| x.ok()) {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with("ttyACM") || name.starts_with("ttyUSB") {
+            names.push(name);
+        }
+    }
+    names.sort();
+    names
+        .into_iter()
+        .map(|n| probe_serial_port(&format!("/dev/{n}")))
+        .collect()
+}
+
+#[cfg(unix)]
+fn probe_serial_port(device: &str) -> SerialPortInfo {
+    let mut notes = Vec::new();
+    let path = PathBuf::from(device);
+    let by_id_name = find_serial_by_id(&path);
+    #[cfg(target_os = "linux")]
+    let (vendor_id, product_id, product_label) = udev_properties_linux(device, &mut notes);
+    #[cfg(not(target_os = "linux"))]
+    let (vendor_id, product_id, product_label) = (None, None, None);
+
+    let maybe_conbee_hint = vendor_id
+        .as_deref()
+        .map(|v| v.eq_ignore_ascii_case("1cf1"))
+        .unwrap_or(false);
+
+    SerialPortInfo {
+        device: device.to_string(),
+        by_id_name,
+        vendor_id,
+        product_id,
+        product_label,
+        maybe_conbee_hint,
+        notes,
+    }
+}
+
+#[cfg(unix)]
+fn find_serial_by_id(dev: &Path) -> Option<String> {
+    let canonical = std::fs::canonicalize(dev).ok()?;
+    let by_id = Path::new("/dev/serial/by-id");
+    let Ok(rd) = std::fs::read_dir(by_id) else {
+        return None;
+    };
+    for e in rd.filter_map(|x| x.ok()) {
+        let p = e.path();
+        if let Ok(t) = std::fs::canonicalize(&p) {
+            if t == canonical {
+                return Some(e.file_name().to_string_lossy().into());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn udev_properties_linux(device: &str, notes: &mut Vec<String>) -> (Option<String>, Option<String>, Option<String>) {
+    let Ok(out) = Command::new("udevadm")
+        .args(["info", "--query=property", &format!("--name={device}")])
+        .output()
+    else {
+        notes.push("udevadm indisponible ou échec".into());
+        return (None, None, None);
+    };
+    if !out.status.success() {
+        notes.push(format!(
+            "udevadm status {}",
+            out.status.code().unwrap_or(-1)
+        ));
+        return (None, None, None);
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut m: HashMap<String, String> = HashMap::new();
+    for line in text.lines() {
+        if let Some((k, v)) = line.split_once('=') {
+            m.insert(k.to_string(), v.to_string());
+        }
+    }
+    let vendor_id = m.get("ID_VENDOR_ID").cloned().or_else(|| m.get("ID_USB_VENDOR_ID").cloned());
+    let product_id = m.get("ID_MODEL_ID").cloned().or_else(|| m.get("ID_USB_MODEL_ID").cloned());
+    let product_label = m
+        .get("ID_MODEL_FROM_DATABASE")
+        .cloned()
+        .or_else(|| m.get("ID_MODEL").cloned());
+    (vendor_id, product_id, product_label)
 }
 
 fn best_disk_for_path(path: &Path) -> Option<(String, u64, u64)> {

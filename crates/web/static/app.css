@@ -702,6 +702,13 @@ th.subhdr {
   gap: var(--space-sm);
   align-items: center;
 }
+.z2m-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-top: var(--space-sm);
+}
 .bt-mac-input {
   flex: 1 1 12rem;
   min-width: 10rem;

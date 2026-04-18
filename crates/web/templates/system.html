@@ -69,6 +69,16 @@
           </div>
         </section>
       </div>
+      <section class="card wide serial-card">
+        <h2>Ports s&#xE9;rie USB</h2>
+        <p class="bt-hint">Lecture seule : <code class="mono">ttyACM*</code>, <code class="mono">ttyUSB*</code> (souvent dongles Zigbee / Conbee). Sous Linux, m&#xE9;tadonn&#xE9;es <code>udev</code> quand disponibles. Voir <span class="mono">docs/zigbee-conbee.md</span> dans le d&#xE9;p&#xF4;t.</p>
+        <div class="table-scroll-wrap">
+          <table class="data">
+            <tbody id="tbody-serial">%%SERIAL_ROWS%%</tbody>
+          </table>
+        </div>
+      </section>
+      %%ZIGBEE2MQTT_PANEL%%
       <section class="card wide bluetooth-card">
         <h2>Bluetooth</h2>
         <p class="bt-hint">Lecture seule : adaptateurs (<code>/sys/class/bluetooth</code>, <code>bluetoothctl show</code>) et appareils connus (<code>bluetoothctl devices</code>, avec Appairé / Connecté quand c’est disponible). Pas de scan, pas d’appairage, pas de BLE GATT — utilisez BlueZ ou une intégration future.</p>

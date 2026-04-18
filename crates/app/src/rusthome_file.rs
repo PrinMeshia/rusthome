@@ -10,6 +10,34 @@ use crate::RunLimits;
 use rusthome_core::{ConfigSnapshot, PhysicalProjectionMode};
 use rusthome_rules::RulesPreset;
 
+/// Optional `[zigbee2mqtt]` — MQTT bridge control when Zigbee2MQTT shares the same broker as `rusthome serve`.
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Zigbee2MqttConfig {
+    /// Topic prefix (e.g. `zigbee2mqtt`). Published: `{prefix}/bridge/request`.
+    #[serde(default)]
+    pub mqtt_topic_prefix: Option<String>,
+    /// Default duration for permit join (seconds), 1–900.
+    #[serde(default)]
+    pub permit_join_seconds: Option<u64>,
+}
+
+impl Zigbee2MqttConfig {
+    /// Effective MQTT topic prefix (non-empty).
+    pub fn resolved_topic_prefix(&self) -> String {
+        self.mqtt_topic_prefix
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("zigbee2mqtt")
+            .to_string()
+    }
+
+    /// Default permit-join duration for API/UI.
+    pub fn resolved_permit_join_seconds(&self) -> u64 {
+        self.permit_join_seconds.unwrap_or(120).clamp(1, 900)
+    }
+}
+
 /// `[run_limits]` sub-table — plan §6.6; omitted fields use engine defaults.
 #[derive(Debug, Default, Deserialize)]
 pub struct RunLimitsConfig {
@@ -36,6 +64,8 @@ pub struct RusthomeFile {
     pub io_timeout_logical_delta: Option<i64>,
     #[serde(default)]
     pub run_limits: Option<RunLimitsConfig>,
+    #[serde(default)]
+    pub zigbee2mqtt: Option<Zigbee2MqttConfig>,
 }
 
 pub const PHYSICAL_MODES_HELP: &str = "simulation, io_anchored";
@@ -65,6 +95,31 @@ pub fn validate_rusthome_file(file: &RusthomeFile) -> Result<(), String> {
     }
     if let Some(ref rl) = file.run_limits {
         validate_run_limits_config(rl)?;
+    }
+    if let Some(ref z) = file.zigbee2mqtt {
+        validate_zigbee2mqtt_config(z)?;
+    }
+    Ok(())
+}
+
+fn validate_zigbee2mqtt_config(z: &Zigbee2MqttConfig) -> Result<(), String> {
+    if let Some(ref p) = z.mqtt_topic_prefix {
+        let t = p.trim();
+        if t.is_empty() {
+            return Err("zigbee2mqtt.mqtt_topic_prefix: must not be empty when set".into());
+        }
+        if t.contains('#') || t.contains('+') || t.contains(' ') {
+            return Err(
+                "zigbee2mqtt.mqtt_topic_prefix: must not contain #, +, or spaces".into(),
+            );
+        }
+    }
+    if let Some(s) = z.permit_join_seconds {
+        if s == 0 || s > 900 {
+            return Err(format!(
+                "zigbee2mqtt.permit_join_seconds: must be between 1 and 900, got {s}"
+            ));
+        }
     }
     Ok(())
 }
@@ -334,6 +389,28 @@ max_wall_ms_per_run = 5000
             r#"
 [run_limits]
 max_events_per_run = 0
+"#,
+        )
+        .unwrap();
+        let e = load_rusthome_file(dir.path()).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn zigbee2mqtt_defaults_resolve() {
+        let z = Zigbee2MqttConfig::default();
+        assert_eq!(z.resolved_topic_prefix(), "zigbee2mqtt");
+        assert_eq!(z.resolved_permit_join_seconds(), 120);
+    }
+
+    #[test]
+    fn zigbee2mqtt_bad_prefix_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("rusthome.toml"),
+            r#"
+[zigbee2mqtt]
+mqtt_topic_prefix = "bad#topic"
 "#,
         )
         .unwrap();

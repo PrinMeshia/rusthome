@@ -91,6 +91,37 @@
       trKV('Utilisation CPU', esc(s.cpu_usage_percent.toFixed(1) + ' %')) +
       trKV('Temp\u00E9rature (max capteurs)', esc(temp)) +
       trKV('Disque (donn\u00E9es)', disk);
+
+    var tbodySerial = $('tbody-serial');
+    if (tbodySerial && Array.isArray(s.serial_ports)) {
+      if (s.serial_ports.length === 0) {
+        tbodySerial.innerHTML =
+          '<tr><td colspan="2" class="cell-empty"><em>Aucun port <code class="mono">ttyACM*</code> / <code class="mono">ttyUSB*</code> d\u00E9tect\u00E9.</em></td></tr>';
+      } else {
+        tbodySerial.innerHTML = s.serial_ports.map(function (p) {
+          var vidPid = '\u2014';
+          if (p.vendor_id && p.product_id) {
+            vidPid = '0x' + esc(p.vendor_id) + ' / 0x' + esc(p.product_id);
+          } else if (p.vendor_id) {
+            vidPid = '0x' + esc(p.vendor_id) + ' / \u2014';
+          } else if (p.product_id) {
+            vidPid = '\u2014 / 0x' + esc(p.product_id);
+          }
+          var byId = p.by_id_name ? esc(p.by_id_name) : '\u2014';
+          var prod = p.product_label ? esc(p.product_label) : '\u2014';
+          var hint = '';
+          if (p.maybe_conbee_hint) {
+            hint = ' <span class="badge badge-fact" title="Dresden Elektronik">indice Conbee</span>';
+          }
+          var notes = '';
+          if (p.notes && p.notes.length) {
+            notes = ' <span class="cell-muted">' + esc(p.notes.join(' \u00B7 ')) + '</span>';
+          }
+          return '<tr><th class="mono">' + esc(p.device) + '</th><td>by-id: ' + byId +
+            ' \u00B7 VID/PID: ' + vidPid + ' \u00B7 ' + prod + hint + notes + '</td></tr>';
+        }).join('');
+      }
+    }
   }
 
   function triBool(v) {
@@ -381,6 +412,24 @@
       if (!btn) return;
       var addr = btn.getAttribute('data-address');
       if (addr) loadBtDeviceInfo(addr);
+    });
+  }
+  var z2mBtn = $('z2m-permit-btn');
+  var z2mStatus = $('z2m-permit-status');
+  if (z2mBtn && z2mStatus) {
+    z2mBtn.addEventListener('click', async function () {
+      z2mStatus.textContent = 'Publication\u2026';
+      try {
+        var res = await fetch('/api/zigbee2mqtt/permit_join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        var text = await res.text();
+        z2mStatus.textContent = text.trim();
+      } catch (e) {
+        z2mStatus.textContent = String(e);
+      }
     });
   }
   schedule();

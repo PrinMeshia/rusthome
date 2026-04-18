@@ -20,9 +20,12 @@ pub async fn serve_all_in_one(
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&data_dir)?;
 
+    let rusthome_file = config::load_rusthome_file(&data_dir)?;
+    let zigbee2mqtt = rusthome_file.zigbee2mqtt.clone();
+
     if no_broker {
         eprintln!("rusthome serve: broker disabled (--no-broker), web dashboard only");
-        return rusthome_web::run(data_dir, &bind, None, None).await;
+        return rusthome_web::run(data_dir, &bind, None, None, zigbee2mqtt).await;
     }
 
     let (live_tx, _) = broadcast::channel::<()>(128);
@@ -70,7 +73,9 @@ pub async fn serve_all_in_one(
     });
 
     let web_handle = tokio::spawn(async move {
-        if let Err(e) = rusthome_web::run(data_dir, &bind, Some(mqtt_pub), Some(live_tx)).await {
+        if let Err(e) =
+            rusthome_web::run(data_dir, &bind, Some(mqtt_pub), Some(live_tx), zigbee2mqtt).await
+        {
             eprintln!("web error: {e}");
         }
     });

@@ -29,12 +29,14 @@ use tokio::sync::broadcast;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
 use serde::Deserialize;
+use rusthome_app::rusthome_file::Zigbee2MqttConfig;
 
 use crate::html_pages::{
     bluetooth_rows_html, contact_rows_html, journal_rows_html, lights_rows_html,
     render_dashboard_page, render_sensors_page, render_system_page, sensors_rows_html,
     summary_cards_html, system_host_rows, system_resource_rows, system_rusthome_rows,
-    temperature_rows_html, DASHBOARD_JOURNAL_ROWS,
+    system_serial_rows_html, temperature_rows_html, zigbee2mqtt_panel_html,
+    DASHBOARD_JOURNAL_ROWS,
 };
 use crate::journal::{journal_tail_dtos, JournalQuery};
 use crate::security::security_banner_html;
@@ -52,6 +54,8 @@ struct AppState {
     mqtt_pub: Option<MqttPub>,
     /// When set (`rusthome serve` with broker), ingest notifies on each journal update → `/api/live` SSE.
     live_tx: Option<broadcast::Sender<()>>,
+    /// Optional `[zigbee2mqtt]` from `rusthome.toml` (permit join via MQTT).
+    zigbee2mqtt: Option<Zigbee2MqttConfig>,
 }
 
 /// Run the Axum server until SIGINT (Ctrl+C). Creates `data_dir` if missing.
@@ -61,11 +65,14 @@ struct AppState {
 ///
 /// Pass `live_events` when ingest runs in-process (`rusthome serve` with broker): each journal
 /// update from MQTT dispatch notifies `GET /api/live` (SSE) so the dashboard can refresh immediately.
+///
+/// Pass `zigbee2mqtt` from `{data-dir}/rusthome.toml` to enable Zigbee2MQTT bridge helpers (e.g. permit join).
 pub async fn run(
     data_dir: PathBuf,
     bind: &str,
     mqtt_pub: Option<MqttPub>,
     live_events: Option<broadcast::Sender<()>>,
+    zigbee2mqtt: Option<Zigbee2MqttConfig>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&data_dir)?;
 
@@ -74,6 +81,7 @@ pub async fn run(
         listen_display: bind.to_string(),
         mqtt_pub,
         live_tx: live_events,
+        zigbee2mqtt,
     };
 
     let app = Router::new()
@@ -93,6 +101,10 @@ pub async fn run(
         .route("/api/bluetooth", get(api_bluetooth))
         .route("/api/bluetooth/device", get(api_bluetooth_device))
         .route("/api/bluetooth/info", get(api_bluetooth_info))
+        .route(
+            "/api/zigbee2mqtt/permit_join",
+            post(api_zigbee2mqtt_permit_join),
+        )
         .route("/api/health", get(api_health))
         .with_state(state);
 
@@ -298,6 +310,69 @@ struct CommandRequest {
     room: String,
 }
 
+#[derive(Deserialize, Default)]
+struct Zigbee2MqttPermitJoinBody {
+    #[serde(default)]
+    seconds: Option<u64>,
+}
+
+async fn api_zigbee2mqtt_permit_join(
+    State(st): State<AppState>,
+    Json(body): Json<Zigbee2MqttPermitJoinBody>,
+) -> impl IntoResponse {
+    let Some(ref zcfg) = st.zigbee2mqtt else {
+        return (
+            StatusCode::NOT_FOUND,
+            "zigbee2mqtt not configured: add [zigbee2mqtt] to rusthome.toml\n",
+        )
+            .into_response();
+    };
+    let Some(pub_handle) = &st.mqtt_pub else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "broker not available (--no-broker mode)\n",
+        )
+            .into_response();
+    };
+    let secs = body
+        .seconds
+        .unwrap_or_else(|| zcfg.resolved_permit_join_seconds())
+        .clamp(1, 900);
+    let prefix = zcfg.resolved_topic_prefix();
+    let topic = format!(
+        "{}/bridge/request",
+        prefix.trim_end_matches('/').trim_start_matches('/')
+    );
+    let payload = serde_json::json!({
+        "type": "permit_join",
+        "value": true,
+        "time": secs,
+    });
+    let bytes = match serde_json::to_vec(&payload) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("json error: {e}"),
+            )
+                .into_response();
+        }
+    };
+    let mut tx = pub_handle.lock().unwrap();
+    match tx.publish(topic, bytes::Bytes::from(bytes)) {
+        Ok(_) => (
+            StatusCode::ACCEPTED,
+            format!("permit join published ({secs} s)\n"),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("publish error: {e}\n"),
+        )
+            .into_response(),
+    }
+}
+
 async fn api_command(
     State(st): State<AppState>,
     Json(req): Json<CommandRequest>,
@@ -348,11 +423,19 @@ async fn page_system(State(st): State<AppState>) -> impl IntoResponse {
         }
     };
     let security_banner = security_banner_html(&snap.listen);
+    let serial_rows = system_serial_rows_html(&snap.serial_ports);
+    let z2m_panel = st
+        .zigbee2mqtt
+        .as_ref()
+        .map(|z| zigbee2mqtt_panel_html(z, st.mqtt_pub.is_some()))
+        .unwrap_or_default();
     let html = render_system_page(
         &security_banner,
         &system_rusthome_rows(&snap),
         &system_host_rows(&snap),
         &system_resource_rows(&snap),
+        &serial_rows,
+        &z2m_panel,
         &bluetooth_rows_html(&bt),
     );
     Html(html).into_response()

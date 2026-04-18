@@ -12,3 +12,10 @@ rules_preset = "home"
 # max_events_generated_per_root = 500
 # max_wall_ms_per_run = 30000
 # max_pending_events = 50000
+#
+# Optional: Zigbee2MQTT bridge on the same MQTT broker as `rusthome serve` — permit join from the System page.
+# See docs/zigbee-conbee.md
+#
+# [zigbee2mqtt]
+# mqtt_topic_prefix = "zigbee2mqtt"
+# permit_join_seconds = 120
