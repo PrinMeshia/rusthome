@@ -6,6 +6,7 @@ mod bluetooth_info;
 mod html_pages;
 mod journal;
 mod security;
+mod sensor_display;
 mod system_info;
 mod util;
 
@@ -33,13 +34,18 @@ use rusthome_app::rusthome_file::Zigbee2MqttConfig;
 
 use crate::html_pages::{
     bluetooth_rows_html, contact_rows_html, journal_rows_html, lights_rows_html,
-    render_dashboard_page, render_sensors_page, render_system_page, sensors_rows_html,
-    summary_cards_html, system_host_rows, system_resource_rows, system_rusthome_rows,
-    system_serial_rows_html, temperature_rows_html, zigbee2mqtt_panel_html,
+    humidity_rows_html, render_dashboard_page, render_sensors_page, render_system_page,
+    sensors_rows_html, summary_cards_html, system_host_rows, system_resource_rows,
+    system_rusthome_rows, system_serial_rows_html, temperature_rows_html, zigbee2mqtt_panel_html,
     DASHBOARD_JOURNAL_ROWS,
 };
 use crate::journal::{journal_tail_dtos, JournalQuery};
 use crate::security::security_banner_html;
+use crate::sensor_display::{
+    load_or_default as sensor_display_load, merge_from_state as sensor_display_merge,
+    save as sensor_display_save, sensor_display_path, validate_document as sensor_display_validate,
+    SensorDisplay,
+};
 use crate::util::esc_html;
 
 /// Opaque handle for publishing MQTT messages to the embedded broker.
@@ -90,13 +96,26 @@ pub async fn run(
         .route("/static/dashboard.js", get(serve_dashboard_js))
         .route("/static/sensors.js", get(serve_sensors_js))
         .route("/static/system.js", get(serve_system_js))
+        .route(
+            "/docs/mqtt-contract",
+            get(serve_mqtt_contract_markdown),
+        )
         .route("/", get(page_dashboard))
         .route("/sensors", get(page_sensors))
         .route("/system", get(page_system))
         .route("/api/state", get(api_state))
+        .route(
+            "/api/sensor-display",
+            get(api_sensor_display_get).put(api_sensor_display_put),
+        )
+        .route(
+            "/api/sensor-display/sync-from-state",
+            post(api_sensor_display_sync),
+        )
         .route("/api/journal", get(api_journal))
         .route("/api/live", get(api_live_sse))
         .route("/api/command", post(api_command))
+        .route("/api/observation", post(api_observation))
         .route("/api/system", get(api_system))
         .route("/api/bluetooth", get(api_bluetooth))
         .route("/api/bluetooth/device", get(api_bluetooth_device))
@@ -188,6 +207,20 @@ async fn serve_sensors_js() -> impl IntoResponse {
     )
 }
 
+async fn serve_mqtt_contract_markdown() -> impl IntoResponse {
+    const MD: &str = include_str!("../../../docs/mqtt-contract.md");
+    (
+        [
+            (header::CONTENT_TYPE, "text/markdown; charset=utf-8"),
+            (
+                header::CACHE_CONTROL,
+                "public, max-age=3600",
+            ),
+        ],
+        MD,
+    )
+}
+
 async fn serve_system_js() -> impl IntoResponse {
     (
         [(
@@ -269,10 +302,14 @@ async fn page_sensors(State(st): State<AppState>) -> impl IntoResponse {
         }
     };
 
+    let broker_available = st.mqtt_pub.is_some();
     let html = render_sensors_page(
         &security_banner,
         &temperature_rows_html(&state),
+        &humidity_rows_html(&state),
         &contact_rows_html(&state),
+        broker_available,
+        st.live_tx.is_some(),
     );
     Html(html).into_response()
 }
@@ -284,6 +321,77 @@ async fn api_state(State(st): State<AppState>) -> impl IntoResponse {
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("replay error: {e}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_sensor_display_get(State(st): State<AppState>) -> impl IntoResponse {
+    let path = sensor_display_path(&st.data_dir);
+    match sensor_display_load(&path) {
+        Ok(d) => Json(d).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("sensor_display load: {e}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_sensor_display_put(
+    State(st): State<AppState>,
+    Json(body): Json<SensorDisplay>,
+) -> impl IntoResponse {
+    if let Err(msg) = sensor_display_validate(&body) {
+        return (StatusCode::BAD_REQUEST, msg).into_response();
+    }
+    let path = sensor_display_path(&st.data_dir);
+    match sensor_display_save(&path, &body) {
+        Ok(()) => Json(body).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("sensor_display save: {e}"),
+        )
+            .into_response(),
+    }
+}
+
+async fn api_sensor_display_sync(State(st): State<AppState>) -> impl IntoResponse {
+    let journal = journal_path(&st.data_dir);
+    let state = match rusthome_app::replay_state(&journal) {
+        Ok(s) => s,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("replay error: {e}"),
+            )
+                .into_response();
+        }
+    };
+    let path = sensor_display_path(&st.data_dir);
+    let mut d = match sensor_display_load(&path) {
+        Ok(doc) => doc,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("sensor_display load: {e}"),
+            )
+                .into_response();
+        }
+    };
+    sensor_display_merge(&state, &mut d);
+    if let Err(msg) = sensor_display_validate(&d) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("sensor_display validate after merge: {msg}"),
+        )
+            .into_response();
+    }
+    match sensor_display_save(&path, &d) {
+        Ok(()) => Json(d).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("sensor_display save: {e}"),
         )
             .into_response(),
     }
@@ -308,6 +416,149 @@ async fn api_journal(
 struct CommandRequest {
     action: String,
     room: String,
+}
+
+#[derive(Deserialize)]
+struct ObservationRequest {
+    /// `motion` | `temperature` | `humidity` | `contact`
+    kind: String,
+    /// Last segment of the MQTT topic (`sensors/<kind>/<entity>`).
+    entity: String,
+    /// Motion only: optional JSON `room` override (otherwise the topic entity is used).
+    #[serde(default)]
+    room: Option<String>,
+    #[serde(default)]
+    celsius: Option<f64>,
+    #[serde(default)]
+    millidegrees_c: Option<i32>,
+    #[serde(default)]
+    percent_rh: Option<f64>,
+    #[serde(default)]
+    permille_rh: Option<i32>,
+    #[serde(default)]
+    open: Option<bool>,
+}
+
+fn validate_topic_entity(raw: &str) -> Result<String, String> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return Err("identifiant topic requis".into());
+    }
+    if t.len() > 128 {
+        return Err("identifiant trop long (max 128)".into());
+    }
+    if t.chars()
+        .any(|c| c == '/' || c == '+' || c == '#' || c.is_whitespace())
+    {
+        return Err("l'identifiant ne doit pas contenir d'espace ni /, + ou #".into());
+    }
+    Ok(t.to_string())
+}
+
+fn normalize_motion_room(room: &Option<String>) -> Result<Option<String>, String> {
+    let Some(ref r) = room else {
+        return Ok(None);
+    };
+    let t = r.trim();
+    if t.is_empty() {
+        return Ok(None);
+    }
+    if t.len() > 128 {
+        return Err("nom de pièce trop long (max 128)".into());
+    }
+    if t.chars().any(|c| c == '\n' || c == '\r') {
+        return Err("nom de pièce invalide".into());
+    }
+    Ok(Some(t.to_string()))
+}
+
+fn observation_topic_and_payload(req: &ObservationRequest) -> Result<(String, Vec<u8>), String> {
+    let kind = req.kind.trim().to_lowercase();
+    let entity = validate_topic_entity(&req.entity)?;
+    match kind.as_str() {
+        "motion" => {
+            let topic = format!("sensors/motion/{entity}");
+            let room = normalize_motion_room(&req.room)?;
+            let payload = if let Some(r) = room {
+                serde_json::to_vec(&serde_json::json!({ "room": r })).map_err(|e| e.to_string())?
+            } else {
+                Vec::new()
+            };
+            Ok((topic, payload))
+        }
+        "temperature" => {
+            let millideg = if let Some(md) = req.millidegrees_c {
+                md
+            } else if let Some(c) = req.celsius {
+                (c * 1000.0).round() as i32
+            } else {
+                return Err("température : renseignez celsius ou millidegrees_c".into());
+            };
+            if !(-100_000..=200_000).contains(&millideg) {
+                return Err("température hors plage plausible".into());
+            }
+            let topic = format!("sensors/temperature/{entity}");
+            let payload = serde_json::to_vec(&serde_json::json!({ "millidegrees_c": millideg }))
+                .map_err(|e| e.to_string())?;
+            Ok((topic, payload))
+        }
+        "humidity" => {
+            let permille: i32 = if let Some(p) = req.permille_rh {
+                p.clamp(0, 1000)
+            } else if let Some(pct) = req.percent_rh {
+                if !(-0.001..=100.001).contains(&pct) {
+                    return Err("humidité relative : 0 à 100 %".into());
+                }
+                ((pct * 10.0).round() as i32).clamp(0, 1000)
+            } else {
+                return Err("humidité : renseignez percent_rh (0–100) ou permille_rh (0–1000)".into());
+            };
+            let topic = format!("sensors/humidity/{entity}");
+            let payload = serde_json::to_vec(&serde_json::json!({ "permille_rh": permille }))
+                .map_err(|e| e.to_string())?;
+            Ok((topic, payload))
+        }
+        "contact" => {
+            let open = req
+                .open
+                .ok_or_else(|| "contact : indiquez open (true ou false)".to_string())?;
+            let topic = format!("sensors/contact/{entity}");
+            let payload =
+                serde_json::to_vec(&serde_json::json!({ "open": open })).map_err(|e| e.to_string())?;
+            Ok((topic, payload))
+        }
+        _ => Err("type inconnu : motion, temperature, humidity ou contact".into()),
+    }
+}
+
+async fn api_observation(
+    State(st): State<AppState>,
+    Json(req): Json<ObservationRequest>,
+) -> impl IntoResponse {
+    let Some(pub_handle) = &st.mqtt_pub else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "broker not available (--no-broker mode)",
+        )
+            .into_response();
+    };
+    let (topic, payload) = match observation_topic_and_payload(&req) {
+        Ok(x) => x,
+        Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+    };
+    let mut tx = pub_handle.lock().unwrap();
+    match tx.publish(topic, bytes::Bytes::from(payload)) {
+        Ok(_) => (
+            StatusCode::ACCEPTED,
+            "observation published",
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("publish error: {e}"),
+        )
+            .into_response(),
+    }
 }
 
 #[derive(Deserialize, Default)]

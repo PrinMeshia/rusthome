@@ -65,7 +65,13 @@ pub(crate) fn dev_footer_dashboard() -> String {
 }
 
 pub(crate) fn dev_footer_sensors() -> String {
-    dev_footer_inner(&[("/api/state", "État JSON")])
+    dev_footer_inner(&[
+        ("/api/state", "État JSON"),
+        ("/api/sensor-display", "Métadonnées capteurs JSON"),
+        ("/api/sensor-display/sync-from-state", "POST synchro libellés"),
+        ("/api/observation", "POST observation MQTT test"),
+        ("/docs/mqtt-contract", "Contrat MQTT"),
+    ])
 }
 
 pub(crate) fn dev_footer_system() -> String {
@@ -148,8 +154,9 @@ pub(crate) fn summary_cards_html(state: &CoreState, journal_count: usize) -> Str
     let rooms = state.light_room_rows().len();
     let lights_on = state.light_room_rows().iter().filter(|(_, on, _)| *on).count();
     let temp_count = state.temperature_readings().len();
+    let humidity_count = state.humidity_readings().len();
     let contact_count = state.contact_states().len();
-    let sensor_count = temp_count + contact_count;
+    let sensor_count = temp_count + humidity_count + contact_count;
 
     format!(
         r#"<div class="summary-card"><span class="summary-icon">{icon_rooms}</span><span class="summary-value">{rooms}</span><span class="summary-label">Pièces</span></div><div class="summary-card"><span class="summary-icon">{icon_light}</span><span class="summary-value">{lights_on}/{rooms}</span><span class="summary-label">Lampes</span></div><div class="summary-card"><span class="summary-icon">{icon_sensor}</span><span class="summary-value">{sensor_count}</span><span class="summary-label">Capteurs</span></div><div class="summary-card"><span class="summary-icon">{icon_journal}</span><span class="summary-value">{journal_count}</span><span class="summary-label">Événements</span></div>"#,
@@ -163,7 +170,10 @@ pub(crate) fn summary_cards_html(state: &CoreState, journal_count: usize) -> Str
 pub(crate) fn sensors_rows_html(state: &CoreState) -> String {
     let mut out = String::new();
 
-    if state.temperature_readings().is_empty() && state.contact_states().is_empty() {
+    if state.temperature_readings().is_empty()
+        && state.humidity_readings().is_empty()
+        && state.contact_states().is_empty()
+    {
         return r#"<tr><td colspan="3" class="cell-empty"><em>Aucune donnée capteur</em></td></tr>"#
             .to_string();
     }
@@ -176,6 +186,16 @@ pub(crate) fn sensors_rows_html(state: &CoreState) -> String {
             id = esc_html(sensor_id),
             val = celsius,
             deg = "\u{00B0}",
+        ));
+    }
+
+    for (sensor_id, permille) in state.humidity_readings() {
+        let pct = *permille as f64 / 10.0;
+        out.push_str(&format!(
+            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge badge-fact">{val:.1} %</span></td><td class="col-prov">humidité</td></tr>"#,
+            icon = "\u{1F4A7}",
+            id = esc_html(sensor_id),
+            val = pct,
         ));
     }
 
@@ -197,6 +217,14 @@ pub(crate) fn sensors_rows_html(state: &CoreState) -> String {
     out
 }
 
+pub(crate) fn broker_pill_html(broker_available: bool) -> &'static str {
+    if broker_available {
+        r#"<span id="broker-pill" class="broker-pill broker-ok" title="Broker MQTT intégré : commandes lumière et publications capteurs">MQTT prêt</span>"#
+    } else {
+        r#"<span id="broker-pill" class="broker-pill broker-off" title="Pas de broker : lancez rusthome serve pour publier des commandes et des observations">Lecture seule</span>"#
+    }
+}
+
 pub(crate) fn render_dashboard_page(
     security_banner: &str,
     journal_path_display: &str,
@@ -213,11 +241,6 @@ pub(crate) fn render_dashboard_page(
         if broker_available { "true" } else { "false" },
         if live_push { "true" } else { "false" }
     );
-    let broker_pill = if broker_available {
-        r#"<span id="broker-pill" class="broker-pill broker-ok" title="Broker MQTT intégré : commandes lumière actives">MQTT prêt</span>"#
-    } else {
-        r#"<span id="broker-pill" class="broker-pill broker-off" title="Pas de broker : lancez rusthome serve pour publier des commandes">Lecture seule</span>"#
-    };
     include_str!("../templates/dashboard.html")
         .replace("%%SECURITY_BANNER%%", security_banner)
         .replace("%%JOURNAL_PATH%%", journal_path_display)
@@ -226,7 +249,7 @@ pub(crate) fn render_dashboard_page(
         .replace("%%SUMMARY_CARDS%%", summary_cards)
         .replace("%%SENSORS_ROWS%%", sensors_rows)
         .replace("%%RH_DASHBOARD_CONFIG%%", &dashboard_cfg)
-        .replace("%%BROKER_PILL%%", broker_pill)
+        .replace("%%BROKER_PILL%%", broker_pill_html(broker_available))
         .replace("%%MAIN_NAV%%", &main_nav_html(NavPage::Dashboard))
         .replace("%%DEV_FOOTER%%", &dev_footer_dashboard())
 }
@@ -234,27 +257,37 @@ pub(crate) fn render_dashboard_page(
 pub(crate) fn render_sensors_page(
     security_banner: &str,
     temp_rows: &str,
+    humidity_rows: &str,
     contact_rows: &str,
+    broker_available: bool,
+    live_push: bool,
 ) -> String {
+    let sensors_cfg = format!(
+        r#"{{"brokerAvailable":{},"livePush":{}}}"#,
+        if broker_available { "true" } else { "false" },
+        if live_push { "true" } else { "false" },
+    );
     include_str!("../templates/sensors.html")
         .replace("%%SECURITY_BANNER%%", security_banner)
         .replace("%%TEMPERATURE_ROWS%%", temp_rows)
+        .replace("%%HUMIDITY_ROWS%%", humidity_rows)
         .replace("%%CONTACT_ROWS%%", contact_rows)
+        .replace("%%BROKER_PILL%%", broker_pill_html(broker_available))
+        .replace("%%RH_SENSORS_CONFIG%%", &sensors_cfg)
         .replace("%%MAIN_NAV%%", &main_nav_html(NavPage::Sensors))
         .replace("%%DEV_FOOTER%%", &dev_footer_sensors())
 }
 
 pub(crate) fn temperature_rows_html(state: &CoreState) -> String {
     if state.temperature_readings().is_empty() {
-        return r#"<tr><td colspan="2" class="cell-empty"><em>Aucun capteur de température</em></td></tr>"#
+        return r#"<tr><td colspan="4" class="cell-empty"><em>Aucun capteur de température</em></td></tr>"#
             .to_string();
     }
     let mut out = String::new();
     for (sensor_id, millideg) in state.temperature_readings() {
         let celsius = *millideg as f64 / 1000.0;
         out.push_str(&format!(
-            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge badge-fact">{val:.1}{deg}C</span></td></tr>"#,
-            icon = "\u{1F321}\u{FE0F}",
+            r#"<tr><td class="sensor-cell-meta"></td><td class="sensor-cell-meta"></td><td class="sensor-id-cell mono">{id}</td><td><span class="badge badge-fact">{val:.1}{deg}C</span></td></tr>"#,
             id = esc_html(sensor_id),
             val = celsius,
             deg = "\u{00B0}",
@@ -263,9 +296,26 @@ pub(crate) fn temperature_rows_html(state: &CoreState) -> String {
     out
 }
 
+pub(crate) fn humidity_rows_html(state: &CoreState) -> String {
+    if state.humidity_readings().is_empty() {
+        return r#"<tr><td colspan="4" class="cell-empty"><em>Aucun capteur d&apos;humidité</em></td></tr>"#
+            .to_string();
+    }
+    let mut out = String::new();
+    for (sensor_id, permille) in state.humidity_readings() {
+        let pct = *permille as f64 / 10.0;
+        out.push_str(&format!(
+            r#"<tr><td class="sensor-cell-meta"></td><td class="sensor-cell-meta"></td><td class="sensor-id-cell mono">{id}</td><td><span class="badge badge-fact">{val:.1} %</span></td></tr>"#,
+            id = esc_html(sensor_id),
+            val = pct,
+        ));
+    }
+    out
+}
+
 pub(crate) fn contact_rows_html(state: &CoreState) -> String {
     if state.contact_states().is_empty() {
-        return r#"<tr><td colspan="2" class="cell-empty"><em>Aucun contact</em></td></tr>"#.to_string();
+        return r#"<tr><td colspan="4" class="cell-empty"><em>Aucun contact</em></td></tr>"#.to_string();
     }
     let mut out = String::new();
     for (sensor_id, open) in state.contact_states() {
@@ -275,8 +325,7 @@ pub(crate) fn contact_rows_html(state: &CoreState) -> String {
             ("Fermé", "badge-fact")
         };
         out.push_str(&format!(
-            r#"<tr><td class="col-room">{icon} {id}</td><td><span class="badge {cls}">{st}</span></td></tr>"#,
-            icon = "\u{1F6AA}",
+            r#"<tr><td class="sensor-cell-meta"></td><td class="sensor-cell-meta"></td><td class="sensor-id-cell mono">{id}</td><td><span class="badge {cls}">{st}</span></td></tr>"#,
             id = esc_html(sensor_id),
             cls = badge_class,
             st = state_text,

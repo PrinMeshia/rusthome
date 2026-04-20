@@ -8,4 +8,6 @@ pub trait StateView: Send + Sync {
     fn temperature(&self, sensor_id: &str) -> Option<i32>;
     /// Last known contact state (`true` = open), or `None` if never seen.
     fn contact_open(&self, sensor_id: &str) -> Option<bool>;
+    /// Last relative humidity in permille (0–1000 = 0.0 %–100.0 %), or `None` if never seen.
+    fn humidity_permille(&self, sensor_id: &str) -> Option<i32>;
 }

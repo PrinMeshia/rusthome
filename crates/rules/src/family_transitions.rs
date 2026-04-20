@@ -15,7 +15,8 @@ pub fn kind_family(k: EventKind) -> Family {
     match k {
         EventKind::MotionDetected
         | EventKind::TemperatureReading
-        | EventKind::ContactChanged => Family::Observation,
+        | EventKind::ContactChanged
+        | EventKind::HumidityReading => Family::Observation,
         EventKind::TurnOnLight | EventKind::TurnOffLight | EventKind::NotifyUser | EventKind::LogUsage => {
             Family::Command
         }
@@ -25,7 +26,8 @@ pub fn kind_family(k: EventKind) -> Family {
         | EventKind::CommandIo
         | EventKind::StateCorrectedFromObservation
         | EventKind::TemperatureRecorded
-        | EventKind::ContactStateChanged => Family::Fact,
+        | EventKind::ContactStateChanged
+        | EventKind::HumidityRecorded => Family::Fact,
         EventKind::ErrorOccurred => Family::Error,
     }
 }

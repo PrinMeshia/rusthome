@@ -265,6 +265,15 @@ fn sample_event(kind: EventKind) -> Option<Event> {
                 provenance: Provenance::Observed,
             }))
         }
+        EventKind::HumidityReading => Some(Event::Observation(ObservationEvent::HumidityReading {
+            sensor_id: "_".into(),
+            permille_rh: 500,
+        })),
+        EventKind::HumidityRecorded => Some(Event::Fact(FactEvent::HumidityRecorded {
+            sensor_id: "_".into(),
+            permille_rh: 500,
+            provenance: Provenance::Observed,
+        })),
     }
 }
 
@@ -330,11 +339,13 @@ mod tests {
         let h_ids: Vec<_> = h.rules().iter().map(|r| r.rule_id()).collect();
         assert_eq!(
             v_ids,
-            vec!["R1", "R2", "R3", "R7", "R4", "R5", "R8", "R9", "R10", "R11"]
+            vec![
+                "R1", "R2", "R3", "R7", "R4", "R5", "R8", "R9", "R10", "R11", "R12", "R13"
+            ]
         );
         assert_eq!(
             h_ids,
-            vec!["R1", "R3", "R7", "R4", "R5", "R8", "R9", "R10", "R11"]
+            vec!["R1", "R3", "R7", "R4", "R5", "R8", "R9", "R10", "R11", "R12", "R13"]
         );
     }
 

@@ -1,4 +1,4 @@
-//! Integration test: R8/R9/R10/R11 for temperature and contact events.
+//! Integration test: R8–R11 and R12–R13 for temperature, contact, and humidity events.
 
 mod common;
 
@@ -53,6 +53,44 @@ fn temperature_reading_records_and_logs() {
 
     // Cascade: 1 obs + R8 fact + R10 cmd + R5 usage_logged = 4 lines
     assert_eq!(line_count(&path), 4, "temperature cascade shape");
+}
+
+#[test]
+fn humidity_reading_records_and_logs() {
+    let (_dir, path) = common::temp_events_jsonl();
+    let mut journal = Journal::open(&path).unwrap();
+    let mut state = State::new();
+    let reg = Registry::home_default();
+    let cfg = ConfigSnapshot::default();
+
+    ingest_observation_with_causal(
+        &mut journal,
+        &mut state,
+        &reg,
+        &cfg,
+        0,
+        ObservationEvent::HumidityReading {
+            sensor_id: "bath".into(),
+            permille_rh: 655,
+        },
+        Uuid::from_u128(0x7E_0002),
+        RunLimits::default(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        state.humidity_permille("bath"),
+        Some(655),
+        "humidity should be recorded in state"
+    );
+    assert_eq!(
+        state.last_log_item(),
+        Some("humidity:bath"),
+        "R13 should log the humidity reading"
+    );
+
+    // Cascade: 1 obs + R12 fact + R13 cmd + R5 usage_logged = 4 lines
+    assert_eq!(line_count(&path), 4, "humidity cascade shape");
 }
 
 #[test]

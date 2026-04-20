@@ -9,5 +9,8 @@
 | `CommandEvent::TurnOffLight` + rule **R7** | All presets: `TurnOffLight` → `LightOff` + `CommandIo` Dispatched/Acked (mirror of R3). CLI: `turn-off-light` (`--command-id`, `--causal-chain-id`, `--trace-file`). Example: `ingest_turn_off`. |
 | `schema_version` 2 | Commands require `command_id`; append dedup (`JournalAppendOutcome`). |
 | `schema_version` 3 | `ErrorOccurred` event (audit pipeline failures in the drain); ignored by facts-only replay. |
+| `schema_version` 4 | Observation/contact/temperature families as documented for journal lines before humidity. |
+| `schema_version` 5 | `HumidityRecorded` fact + `ObservationEvent::HumidityReading` (permille RH 0–1000 in state). |
+| Registry **R12** / **R13** (`home` / `v0`; not `minimal`) | Humidity observation → fact → usage log (mirror R8/R10 for temperature). |
 
 Update this on every behavioural registry change. The snapshot `rules_digest` field should reflect the version tracked in prod or lab.

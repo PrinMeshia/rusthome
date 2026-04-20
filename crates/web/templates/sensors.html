@@ -9,6 +9,7 @@
 <body class="page-sensors">
   <div class="wrap">
     %%SECURITY_BANNER%%
+    <div id="observation-toast" role="status" aria-live="polite" aria-atomic="true"></div>
     <div id="error-bar" role="alert"></div>
     <div class="app-sticky">
       <div class="app-brand">
@@ -17,7 +18,10 @@
       </div>
       %%MAIN_NAV%%
       <div class="toolbar">
+        %%BROKER_PILL%%
         <button type="button" id="btn-refresh">Actualiser</button>
+        <button type="button" id="btn-sensor-sync">Synchroniser avec l&apos;état</button>
+        <button type="button" id="btn-sensor-save">Enregistrer les libellés</button>
         <label class="prefs-label">Actualisation auto
           <select id="refresh-interval-select" class="pref-select" aria-label="Intervalle d’actualisation automatique">
             <option value="0">Manuelle</option>
@@ -42,22 +46,85 @@
         <span id="updated-at"></span>
       </div>
     </div>
+    <div class="sensors-filters-wrap">
+      <div class="sensors-filters" role="search" aria-label="Filtrer les capteurs">
+        <label class="sensors-filter-label" for="sensors-search">Rechercher</label>
+        <input type="search" id="sensors-search" class="sensors-search-input" placeholder="Identifiant, pièce, préfixe…" autocomplete="off" spellcheck="false" aria-describedby="sensors-filter-hint">
+        <label class="sensors-filter-label" for="sensors-kind-filter">Type</label>
+        <select id="sensors-kind-filter" class="pref-select sensors-kind-select" aria-label="Type de capteur">
+          <option value="all">Tous les types</option>
+          <option value="temperature">Températures</option>
+          <option value="humidity">Humidité</option>
+          <option value="contact">Contacts</option>
+        </select>
+        <span id="sensors-filter-count" class="sensors-filter-count" aria-live="polite"></span>
+      </div>
+        <p id="sensors-filter-hint" class="sensors-filter-hint">Filtre sur l’identifiant technique, le <strong>libellé</strong> ou la <strong>pièce</strong> (insensible à la casse). Les libellés sont stockés dans <code class="mono">sensor_display.json</code> (hors journal). Le <strong>type</strong> suit les familles MQTT décrites dans le <a href="/docs/mqtt-contract">contrat MQTT</a> (copie embarquée). Pour faire apparaître un capteur dans l’état, une lecture doit entrer dans le journal (MQTT réel ou simulation ci‑dessous).</p>
+    </div>
     <main class="app-main">
+      <section class="card sensors-obs-card" aria-labelledby="sensors-obs-h2">
+        <h2 id="sensors-obs-h2">Ajouter une lecture (simulation MQTT)</h2>
+        <p class="sensors-obs-hint">Publie sur <code class="mono">sensors/&lt;type&gt;/&lt;identifiant&gt;</code> comme le ferait un appareil. Même effet qu’une publication MQTT vers le broker intégré : le journal et les règles sont mis à jour. <strong>Exige</strong> <code class="mono">rusthome serve</code> <em>sans</em> <code class="mono">--no-broker</code>.</p>
+        <form id="form-observation" class="sensors-obs-form">
+          <div class="sensors-obs-row">
+            <label class="sensors-obs-label" for="obs-kind">Type</label>
+            <select id="obs-kind" class="pref-select" aria-label="Type d&apos;observation">
+              <option value="temperature">Température</option>
+              <option value="humidity">Humidité</option>
+              <option value="contact">Contact</option>
+              <option value="motion">Mouvement</option>
+            </select>
+          </div>
+          <div class="sensors-obs-row">
+            <label class="sensors-obs-label" for="obs-entity">Identifiant (segment topic)</label>
+            <input type="text" id="obs-entity" name="entity" class="sensors-obs-input mono" required maxlength="128" placeholder="ex. salon" autocomplete="off" spellcheck="false" aria-describedby="obs-entity-hint">
+            <span id="obs-entity-hint" class="sensors-obs-field-hint">Sans espaces ni « / ». Sert de <code class="mono">sensor_id</code> ou d’entité motion selon le type.</span>
+          </div>
+          <div class="sensors-obs-row" id="obs-row-motion-room" hidden>
+            <label class="sensors-obs-label" for="obs-room">Pièce (optionnel, JSON)</label>
+            <input type="text" id="obs-room" class="sensors-obs-input" maxlength="128" placeholder="Surcharge du nom de pièce pour les règles" autocomplete="off">
+          </div>
+          <div class="sensors-obs-row" id="obs-row-temp">
+            <label class="sensors-obs-label" for="obs-celsius">Température (°C)</label>
+            <input type="number" id="obs-celsius" class="sensors-obs-input" step="0.1" value="21">
+          </div>
+          <div class="sensors-obs-row" id="obs-row-humidity" hidden>
+            <label class="sensors-obs-label" for="obs-percent-rh">Humidité relative (%)</label>
+            <input type="number" id="obs-percent-rh" class="sensors-obs-input" step="0.1" min="0" max="100" value="50">
+          </div>
+          <div class="sensors-obs-row" id="obs-row-contact" hidden>
+            <label class="sensors-obs-label" for="obs-open">Contact ouvert</label>
+            <input type="checkbox" id="obs-open" aria-label="Contact ouvert">
+          </div>
+          <div class="sensors-obs-actions">
+            <button type="submit" id="obs-submit" class="sensors-obs-submit">Publier sur MQTT</button>
+          </div>
+        </form>
+      </section>
       <div class="grid">
-        <section class="card">
+        <section class="card sensors-section-card" id="sensors-section-temp" data-sensor-section="temperature">
           <h2>&#x1F321;&#xFE0F; Températures</h2>
           <div class="table-scroll-wrap">
             <table class="data">
-              <thead><tr><th>Capteur</th><th>Valeur</th></tr></thead>
+              <thead><tr><th>Libellé</th><th>Pièce</th><th>ID</th><th>Valeur</th></tr></thead>
               <tbody id="temp-body">%%TEMPERATURE_ROWS%%</tbody>
             </table>
           </div>
         </section>
-        <section class="card">
+        <section class="card sensors-section-card" id="sensors-section-humidity" data-sensor-section="humidity">
+          <h2>&#x1F4A7; Humidité</h2>
+          <div class="table-scroll-wrap">
+            <table class="data">
+              <thead><tr><th>Libellé</th><th>Pièce</th><th>ID</th><th>Valeur</th></tr></thead>
+              <tbody id="humidity-body">%%HUMIDITY_ROWS%%</tbody>
+            </table>
+          </div>
+        </section>
+        <section class="card sensors-section-card" id="sensors-section-contact" data-sensor-section="contact">
           <h2>&#x1F6AA; Contacts</h2>
           <div class="table-scroll-wrap">
             <table class="data">
-              <thead><tr><th>Capteur</th><th>État</th></tr></thead>
+              <thead><tr><th>Libellé</th><th>Pièce</th><th>ID</th><th>État</th></tr></thead>
               <tbody id="contact-body">%%CONTACT_ROWS%%</tbody>
             </table>
           </div>
@@ -67,6 +134,7 @@
     %%DEV_FOOTER%%
   </div>
   <script src="/static/common.js" defer></script>
+  <script type="application/json" id="rh-sensors-config">%%RH_SENSORS_CONFIG%%</script>
   <script src="/static/sensors.js" defer></script>
 </body>
 </html>

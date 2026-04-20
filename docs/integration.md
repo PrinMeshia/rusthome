@@ -18,6 +18,23 @@ Minimal **reproductible** path aligned with Phase 2 of the domotic plan:
 
 **Zigbee / Conbee** (clé USB, Zigbee2MQTT, broker partagé, appairage) : [zigbee-conbee.md](zigbee-conbee.md).
 
+## Checklist : ajouter un capteur (sans modifier le code rusthome)
+
+Pour enregistrer un **nouveau** périphérique dans le journal et la page **Capteurs**, il suffit que l’adaptateur (Zigbee2MQTT, script, etc.) publie sur le **même broker** que rusthome des messages conformes au [contrat MQTT](mqtt-contract.md). Rusthome ne tient pas de « registre » d’IDs : l’identifiant affiché est celui du **topic** ou du JSON (`room`, `sensor_id`, …).
+
+1. **Broker** : Zigbee2MQTT (ou autre) et `rusthome serve` pointent vers le **même** MQTT (embarqué `localhost:1883` ou Mosquitto commun).
+2. **Mapping** : pour chaque grandeur, repérer la famille (`sensors/motion/…`, `sensors/temperature/…`, `sensors/contact/…`, `sensors/humidity/…` selon le [contrat](mqtt-contract.md)) et fixer un **nom stable** (souvent via `friendly_name` / renommage côté pont).
+3. **Test** : `mosquitto_pub -h … -t 'sensors/temperature/essai' -m '{"millidegrees_c":21500}'` puis vérifier `rusthome state` ou `/sensors`.
+4. **Appairage Zigbee** : appairage matériel côté Z2M / Phoscon ; option [permit join depuis la page Système](zigbee-conbee.md) si `[zigbee2mqtt]` est configuré.
+5. **Filtrer dans l’UI** : page **Capteurs** — recherche textuelle et filtre par type ; copie locale du contrat : fichier `docs/mqtt-contract.md` ou, avec le serveur web lancé, `GET /docs/mqtt-contract`.
+
+### Libellés et pièces (hors journal)
+
+L’**identifiant technique** (`sensor_id` / segment de topic) reste la source de vérité côté MQTT et journal. Pour l’affichage seulement, le serveur web peut stocker un fichier optionnel **`{data-dir}/sensor_display.json`** : libellé et pièce par famille (`temperature`, `humidity`, `contact`). Les entrées pour des IDs **absents** de l’état actuel (orphelines) sont **conservées** si vous les aviez déjà saisies — elles réapparaissent dans les tableaux avec « Pas de mesure récente » jusqu’à ce qu’une nouvelle ligne de journal réutilise le même ID.
+
+- **Synchroniser** : bouton sur la page Capteurs appelle `POST /api/sensor-display/sync-from-state` — fusionne les IDs présents dans l’état replayé sans effacer les métadonnées existantes.
+- **Enregistrer** : `PUT /api/sensor-display` avec le document JSON complet ; **GET** `/api/sensor-display` pour lecture.
+
 ---
 
 ## Paths into the system

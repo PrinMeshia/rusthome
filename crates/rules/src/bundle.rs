@@ -19,9 +19,14 @@ pub(crate) static SENSOR_WHITELIST: &[ExceptionalFamilyTransition] = &[
         consumed_kind: EventKind::ContactChanged,
         produced_kind: EventKind::ContactStateChanged,
     },
+    ExceptionalFamilyTransition {
+        rule_id: "R12",
+        consumed_kind: EventKind::HumidityReading,
+        produced_kind: EventKind::HumidityRecorded,
+    },
 ];
 
-/// Full demo: R1–R5 + R7 + R8–R11 (lights + sensors + logging).
+/// Full demo: R1–R5 + R7 + R8–R11 + R12–R13 (lights + sensors + logging).
 pub(crate) fn arc_rules_v0() -> Vec<Arc<dyn Rule>> {
     vec![
         Arc::new(crate::rules_impl::R1),
@@ -34,6 +39,8 @@ pub(crate) fn arc_rules_v0() -> Vec<Arc<dyn Rule>> {
         Arc::new(crate::rules_impl::R9),
         Arc::new(crate::rules_impl::R10),
         Arc::new(crate::rules_impl::R11),
+        Arc::new(crate::rules_impl::R12),
+        Arc::new(crate::rules_impl::R13),
     ]
 }
 
@@ -49,6 +56,8 @@ pub(crate) fn arc_rules_home() -> Vec<Arc<dyn Rule>> {
         Arc::new(crate::rules_impl::R9),
         Arc::new(crate::rules_impl::R10),
         Arc::new(crate::rules_impl::R11),
+        Arc::new(crate::rules_impl::R12),
+        Arc::new(crate::rules_impl::R13),
     ]
 }
 
@@ -60,5 +69,6 @@ pub(crate) fn arc_rules_minimal() -> Vec<Arc<dyn Rule>> {
         Arc::new(crate::rules_impl::R7),
         Arc::new(crate::rules_impl::R8),
         Arc::new(crate::rules_impl::R9),
+        Arc::new(crate::rules_impl::R12),
     ]
 }

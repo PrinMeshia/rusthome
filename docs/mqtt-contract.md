@@ -1,6 +1,6 @@
-# MQTT ingest contract (version 1)
+# MQTT ingest contract (version 2)
 
-**Contract version:** `1` (bump when topic shapes or payload rules change; describe migration in [integration.md](integration.md) and [rules-changelog.md](rules-changelog.md) if rules depend on new fields).
+**Contract version:** `2` (bump when topic shapes or payload rules change; describe migration in [integration.md](integration.md) and [rules-changelog.md](rules-changelog.md) if rules depend on new fields).
 
 **Source of truth:** `[crates/app/src/mqtt_ingest.rs](../crates/app/src/mqtt_ingest.rs)` (`observation_from_mqtt`, `command_from_mqtt`, `dispatch_mqtt_publish`).
 
@@ -14,10 +14,11 @@
 | `sensors/motion/{entity}`                         | `MotionDetected { room }`                          | `{entity}` used if payload does not override |
 | `sensors/temperature/{entity}`                    | `TemperatureReading { sensor_id, millidegrees_c }` | See payloads below                           |
 | `sensors/contact/{entity}`                        | `ContactChanged { sensor_id, open }`               |                                              |
+| `sensors/humidity/{entity}`                       | `HumidityReading { sensor_id, permille_rh }`       | 0–1000 permille RH (see payloads)            |
 | `commands/light/{room}/on`                        | `TurnOnLight { room, command_id }`                 | `command_id` generated at ingest             |
 | `commands/light/{room}/off`                       | `TurnOffLight { room, command_id }`                |                                              |
 | Other `commands/...`                              | *skipped*                                          | `Ok(None)` — no journal line                 |
-| Unknown `sensors/...` category                    | *skipped*                                          | e.g. `sensors/humidity/...` → `None`         |
+| Unknown `sensors/...` category                    | *skipped*                                          | e.g. `sensors/pressure/...` → `None`         |
 | `commands/light/{room}` (missing `/on` or `/off`) | **error**                                          | Malformed — surfaces as parse error          |
 
 
@@ -41,6 +42,11 @@ Wildcards on subscribe (e.g. `sensors/#`, `commands/#`) are supported; classific
 - JSON: `open: bool`, or Zigbee2MQTT-style `contact: true` meaning **closed** (inverted to `open = false`).
 - Plain: `open` / `closed` / `true` / `false` / `0` / `1` (see source for exact tokens).
 
+**Humidity** (`permille_rh` in core: 0 = 0%, 1000 = 100%)
+
+- JSON: `permille_rh` (integer), or `relative_humidity` / `humidity` as **percent** 0–100 (float → permille).
+- Plain number string: interpreted as **percent** 0–100 (same as `humidity` float), converted to permille.
+
 Optional: `"ts": <i64>` milliseconds — passed as timestamp **candidate** (still monotonic with `next_ts`).
 
 ## Payloads — commands
@@ -63,3 +69,4 @@ Do **not** rely on foreign timestamps for ordering across devices unless you als
 | Version | Summary                                                                |
 | ------- | ---------------------------------------------------------------------- |
 | 1       | Initial documented contract (matches `mqtt_ingest` as of Phase 2 plan) |
+| 2       | Adds `sensors/humidity/{entity}` → `HumidityReading` (permille RH 0–1000) |

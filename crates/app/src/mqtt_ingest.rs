@@ -7,6 +7,7 @@
 //! | `sensors/motion/{room}` | `ObservationEvent::MotionDetected` |
 //! | `sensors/temperature/{sensor_id}` | `ObservationEvent::TemperatureReading` |
 //! | `sensors/contact/{sensor_id}` | `ObservationEvent::ContactChanged` |
+//! | `sensors/humidity/{sensor_id}` | `ObservationEvent::HumidityReading` |
 //! | `commands/light/{room}/on` | `CommandEvent::TurnOnLight` |
 //! | `commands/light/{room}/off` | `CommandEvent::TurnOffLight` |
 //!
@@ -121,6 +122,15 @@ pub fn observation_from_mqtt(
             let open = parse_contact(payload)?;
             Ok(Some(ObservationEvent::ContactChanged { sensor_id, open }))
         }
+        "humidity" => {
+            let sensor_id = entity_from_payload_and_topic(payload, topic, "sensor_id")
+                .unwrap_or_else(|_| topic_entity.to_string());
+            let permille_rh = parse_humidity(payload)?;
+            Ok(Some(ObservationEvent::HumidityReading {
+                sensor_id,
+                permille_rh,
+            }))
+        }
         _ => Ok(None),
     }
 }
@@ -168,6 +178,27 @@ fn parse_temperature(payload: &[u8]) -> Result<i32, String> {
     }
     s.parse::<i32>()
         .map_err(|_| format!("cannot parse temperature from payload: {s}"))
+}
+
+/// Relative humidity as permille (0–1000). JSON: `permille_rh`, or `relative_humidity` / `humidity` as percent 0–100.
+fn parse_humidity(payload: &[u8]) -> Result<i32, String> {
+    let s = std::str::from_utf8(payload).map_err(|_| "payload is not UTF-8")?;
+    let s = s.trim();
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(s) {
+        if let Some(p) = v.get("permille_rh").and_then(|x| x.as_i64()) {
+            return Ok(p.clamp(0, 1000) as i32);
+        }
+        if let Some(p) = v.get("relative_humidity").and_then(|x| x.as_f64()) {
+            return Ok((p * 10.0).round().clamp(0.0, 1000.0) as i32);
+        }
+        if let Some(p) = v.get("humidity").and_then(|x| x.as_f64()) {
+            return Ok((p * 10.0).round().clamp(0.0, 1000.0) as i32);
+        }
+    }
+    let x: f64 = s
+        .parse()
+        .map_err(|_| format!("cannot parse humidity from payload: {s}"))?;
+    Ok((x * 10.0).round().clamp(0.0, 1000.0) as i32)
 }
 
 fn parse_contact(payload: &[u8]) -> Result<bool, String> {
@@ -331,8 +362,46 @@ mod tests {
     }
 
     #[test]
+    fn humidity_permille_json() {
+        let obs = observation_from_mqtt(
+            "sensors/humidity/bath",
+            br#"{"permille_rh": 655}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            obs,
+            Some(ObservationEvent::HumidityReading { sensor_id, permille_rh })
+                if sensor_id == "bath" && permille_rh == 655
+        ));
+    }
+
+    #[test]
+    fn humidity_percent_json() {
+        let obs = observation_from_mqtt(
+            "sensors/humidity/living",
+            br#"{"humidity": 42.3}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            obs,
+            Some(ObservationEvent::HumidityReading { permille_rh, .. })
+                if permille_rh == 423
+        ));
+    }
+
+    #[test]
+    fn humidity_plain_percent_string() {
+        let obs = observation_from_mqtt("sensors/humidity/attic", b"55").unwrap();
+        assert!(matches!(
+            obs,
+            Some(ObservationEvent::HumidityReading { permille_rh, .. })
+                if permille_rh == 550
+        ));
+    }
+
+    #[test]
     fn unknown_category_returns_none() {
-        let obs = observation_from_mqtt("sensors/humidity/bath", b"80").unwrap();
+        let obs = observation_from_mqtt("sensors/pressure/living", b"1013").unwrap();
         assert!(obs.is_none());
     }
 

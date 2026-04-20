@@ -50,6 +50,10 @@ deCONZ gère la Conbee et expose Phoscon pour l’appairage. Il n’y a pas d’
 | Z2M connecté mais rien dans rusthome | Vérifier broker **identique**, puis mapping des **topics** (voir [integration.md](integration.md)) |
 | Bouton appairage rusthome sans effet | Broker embarqué actif, Z2M abonné au même broker, préfixe MQTT `[zigbee2mqtt]` aligné avec Z2M |
 
+## Checklist « ajouter un capteur »
+
+Procédure pas à pas (broker partagé, mapping topics, tests) : section **Checklist** dans [integration.md](integration.md).
+
 ## Voir aussi
 
 - [mqtt-contract.md](mqtt-contract.md) — contrat versionné des topics

@@ -275,7 +275,7 @@ mod tests {
                 line: 1,
                 found: 1,
                 min: 2,
-                max: 4,
+                max: 5,
             } => {}
             e => panic!("unexpected error: {e:?}"),
         }

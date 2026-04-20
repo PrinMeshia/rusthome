@@ -7,7 +7,7 @@ use crate::error::JournalSchemaError;
 use crate::event::Event;
 
 /// Current schema written by this binary on append (plan §8.2).
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 /// Lowest `schema_version` accepted on load (inclusive). Documented in repo `docs/rules-changelog.md`: 2 = `command_id` + dedup; 3 adds `ErrorOccurred`.
 pub const MIN_SUPPORTED_JOURNAL_SCHEMA: u32 = 2;
@@ -70,6 +70,7 @@ mod schema_tests {
         assert!(journal_schema_supported(2));
         assert!(journal_schema_supported(3));
         assert!(journal_schema_supported(4));
-        assert!(!journal_schema_supported(5));
+        assert!(journal_schema_supported(5));
+        assert!(!journal_schema_supported(6));
     }
 }

@@ -291,6 +291,139 @@ body {
   outline-offset: var(--focus-offset);
 }
 
+/* Sensors page — search + type filter */
+.sensors-filters-wrap {
+  max-width: var(--layout-wide);
+  margin: 0 auto var(--space-lg);
+  padding: 0 var(--space-lg);
+}
+.sensors-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+.sensors-filter-label {
+  font-size: var(--text-small);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.sensors-search-input {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+  max-width: 28rem;
+  font: inherit;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.sensors-search-input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.sensors-kind-select {
+  max-width: 14rem;
+}
+.sensors-filter-count {
+  font-size: var(--text-small);
+  color: var(--muted);
+  margin-left: auto;
+}
+.sensors-filter-hint {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--text-small);
+  color: var(--muted);
+  line-height: 1.45;
+}
+.sensors-filter-hint code {
+  font-size: 0.92em;
+}
+.sensors-obs-card {
+  margin-bottom: var(--space-lg);
+}
+.sensors-obs-hint {
+  margin: 0 0 var(--space-md);
+  font-size: var(--text-small);
+  color: var(--muted);
+  line-height: 1.45;
+}
+.sensors-obs-hint code {
+  font-size: 0.92em;
+}
+.sensors-obs-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-width: 36rem;
+}
+.sensors-obs-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.sensors-obs-label {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--muted);
+}
+.sensors-obs-input {
+  font: inherit;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  max-width: 20rem;
+}
+.sensors-obs-field-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.sensors-obs-field-hint code {
+  font-size: 0.95em;
+}
+.sensors-obs-actions {
+  margin-top: var(--space-sm);
+}
+.sensors-obs-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sensors-section-card.is-filter-hidden {
+  display: none;
+}
+
+.sensor-cell-meta {
+  min-width: 7rem;
+  vertical-align: middle;
+}
+.sensor-meta-input {
+  font: inherit;
+  width: 100%;
+  max-width: 16rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.sensor-id-cell {
+  font-size: var(--text-small);
+  word-break: break-all;
+}
+.cell-muted {
+  color: var(--muted);
+  font-style: normal;
+}
+
 .broker-pill {
   font-size: 0.72rem;
   font-weight: 650;
@@ -354,6 +487,7 @@ button.is-loading {
 }
 
 #command-toast,
+#observation-toast,
 #error-bar {
   display: none;
   padding: var(--space-md) var(--space-lg);
@@ -362,7 +496,8 @@ button.is-loading {
   font-size: 0.9rem;
   line-height: 1.45;
 }
-#command-toast.visible {
+#command-toast.visible,
+#observation-toast.visible {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
@@ -370,7 +505,8 @@ button.is-loading {
   border: 1px solid var(--ok-border);
   color: var(--text);
 }
-#command-toast.visible::before {
+#command-toast.visible::before,
+#observation-toast.visible::before {
   content: var(--toast-icon);
   font-weight: 700;
   color: var(--on);

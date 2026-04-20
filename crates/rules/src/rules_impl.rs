@@ -481,3 +481,90 @@ impl Rule for R11 {
 }
 
 pub static R11_CONTACT_LOG: R11 = R11;
+
+/// HumidityReading → HumidityRecorded (Observation → Fact; same pattern as R8).
+pub struct R12;
+
+impl Rule for R12 {
+    fn rule_id(&self) -> &str {
+        "R12"
+    }
+
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    fn consumes(&self) -> &[EventKind] {
+        &[EventKind::HumidityReading]
+    }
+
+    fn produces(&self) -> &[EventKind] {
+        &[EventKind::HumidityRecorded]
+    }
+
+    fn namespaces(&self) -> Vec<&str> {
+        vec!["sensors"]
+    }
+
+    fn eval(&self, event: &Event, _ctx: &RuleContext<'_>) -> Vec<Event> {
+        match event {
+            Event::Observation(ObservationEvent::HumidityReading {
+                sensor_id,
+                permille_rh,
+            }) => {
+                vec![Event::Fact(FactEvent::HumidityRecorded {
+                    sensor_id: sensor_id.clone(),
+                    permille_rh: *permille_rh,
+                    provenance: Provenance::Observed,
+                })]
+            }
+            _ => vec![],
+        }
+    }
+}
+
+pub static R12_HUMIDITY_FACT: R12 = R12;
+
+/// HumidityRecorded → LogUsage.
+pub struct R13;
+
+impl Rule for R13 {
+    fn rule_id(&self) -> &str {
+        "R13"
+    }
+
+    fn priority(&self) -> i32 {
+        0
+    }
+
+    fn consumes(&self) -> &[EventKind] {
+        &[EventKind::HumidityRecorded]
+    }
+
+    fn produces(&self) -> &[EventKind] {
+        &[EventKind::LogUsage]
+    }
+
+    fn namespaces(&self) -> Vec<&str> {
+        vec!["logging"]
+    }
+
+    fn eval(&self, event: &Event, ctx: &RuleContext<'_>) -> Vec<Event> {
+        match event {
+            Event::Fact(FactEvent::HumidityRecorded { sensor_id, .. }) => {
+                let item = format!("humidity:{sensor_id}");
+                let command_id = deterministic_command_id(
+                    "R13",
+                    "log_usage",
+                    ctx.parent_sequence,
+                    ctx.causal_chain_id,
+                    &item,
+                );
+                vec![Event::Command(CommandEvent::LogUsage { item, command_id })]
+            }
+            _ => vec![],
+        }
+    }
+}
+
+pub static R13_HUMIDITY_LOG: R13 = R13;

@@ -31,6 +31,9 @@ pub struct State {
     /// Sensor id → contact is open (true = open, false = closed).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(crate) contacts: BTreeMap<String, bool>,
+    /// Sensor id → last relative humidity in permille RH (0–1000).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) humidities: BTreeMap<String, i32>,
 }
 
 impl StateView for State {
@@ -48,6 +51,10 @@ impl StateView for State {
 
     fn contact_open(&self, sensor_id: &str) -> Option<bool> {
         self.contacts.get(sensor_id).copied()
+    }
+
+    fn humidity_permille(&self, sensor_id: &str) -> Option<i32> {
+        self.humidities.get(sensor_id).copied()
     }
 }
 
@@ -83,5 +90,10 @@ impl State {
     /// All contact sensor states (sensor_id → open) in deterministic order.
     pub fn contact_states(&self) -> &BTreeMap<String, bool> {
         &self.contacts
+    }
+
+    /// All humidity readings (sensor_id → permille RH) in deterministic order.
+    pub fn humidity_readings(&self) -> &BTreeMap<String, i32> {
+        &self.humidities
     }
 }

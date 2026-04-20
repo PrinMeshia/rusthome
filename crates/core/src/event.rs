@@ -83,6 +83,12 @@ pub enum FactEvent {
         open: bool,
         provenance: Provenance,
     },
+    /// Relative humidity committed to projection (permille: 655 = 65.5 %).
+    HumidityRecorded {
+        sensor_id: String,
+        permille_rh: i32,
+        provenance: Provenance,
+    },
 }
 
 /// Commands — intentions, never applied directly to state.
@@ -116,6 +122,11 @@ pub enum ObservationEvent {
     TemperatureReading { sensor_id: String, millidegrees_c: i32 },
     /// Contact sensor state change (door/window open/close).
     ContactChanged { sensor_id: String, open: bool },
+    /// Relative humidity (permille RH: 0–1000 for 0.0 %–100.0 %).
+    HumidityReading {
+        sensor_id: String,
+        permille_rh: i32,
+    },
 }
 
 /// Persisted runtime error (EPIC 4) — no-op for `replay_state` / `apply_event`.
@@ -155,6 +166,8 @@ pub enum EventKind {
     ContactChanged,
     TemperatureRecorded,
     ContactStateChanged,
+    HumidityReading,
+    HumidityRecorded,
 }
 
 impl Event {
@@ -169,6 +182,7 @@ impl Event {
             }
             Event::Fact(FactEvent::TemperatureRecorded { .. }) => EventKind::TemperatureRecorded,
             Event::Fact(FactEvent::ContactStateChanged { .. }) => EventKind::ContactStateChanged,
+            Event::Fact(FactEvent::HumidityRecorded { .. }) => EventKind::HumidityRecorded,
             Event::Command(CommandEvent::TurnOnLight { .. }) => EventKind::TurnOnLight,
             Event::Command(CommandEvent::TurnOffLight { .. }) => EventKind::TurnOffLight,
             Event::Command(CommandEvent::NotifyUser { .. }) => EventKind::NotifyUser,
@@ -181,6 +195,9 @@ impl Event {
             }
             Event::Observation(ObservationEvent::ContactChanged { .. }) => {
                 EventKind::ContactChanged
+            }
+            Event::Observation(ObservationEvent::HumidityReading { .. }) => {
+                EventKind::HumidityReading
             }
             Event::ErrorOccurred(_) => EventKind::ErrorOccurred,
         }
@@ -203,7 +220,8 @@ impl FactEvent {
             | FactEvent::CommandIo { provenance, .. }
             | FactEvent::StateCorrectedFromObservation { provenance, .. }
             | FactEvent::TemperatureRecorded { provenance, .. }
-            | FactEvent::ContactStateChanged { provenance, .. } => *provenance,
+            | FactEvent::ContactStateChanged { provenance, .. }
+            | FactEvent::HumidityRecorded { provenance, .. } => *provenance,
         }
     }
 }

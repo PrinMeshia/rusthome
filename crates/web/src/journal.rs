@@ -51,6 +51,13 @@ fn event_detail(event: &Event) -> String {
             let state = if *open { "open" } else { "closed" };
             format!("contact: {sensor_id} {state}")
         }
+        Event::Observation(ObservationEvent::HumidityReading {
+            sensor_id,
+            permille_rh,
+        }) => {
+            let pct = *permille_rh as f64 / 10.0;
+            format!("humidity: {sensor_id} {pct:.1}%")
+        }
         Event::Fact(FactEvent::LightOn { room, .. }) => format!("light: {room} on"),
         Event::Fact(FactEvent::LightOff { room, .. }) => format!("light: {room} off"),
         Event::Fact(FactEvent::UsageLogged { item, .. }) => format!("logged: {item}"),
@@ -76,6 +83,14 @@ fn event_detail(event: &Event) -> String {
         }) => {
             let state = if *open { "open" } else { "closed" };
             format!("recorded: {sensor_id} {state}")
+        }
+        Event::Fact(FactEvent::HumidityRecorded {
+            sensor_id,
+            permille_rh,
+            ..
+        }) => {
+            let pct = *permille_rh as f64 / 10.0;
+            format!("recorded: {sensor_id} {pct:.1}% RH")
         }
         Event::Command(CommandEvent::TurnOnLight { room, .. }) => {
             format!("cmd: turn-on {room}")

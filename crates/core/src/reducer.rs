@@ -100,7 +100,8 @@ pub fn validate_fact_for_append(state: &State, fact: &FactEvent) -> Result<(), A
         FactEvent::UsageLogged { .. }
         | FactEvent::StateCorrectedFromObservation { .. }
         | FactEvent::TemperatureRecorded { .. }
-        | FactEvent::ContactStateChanged { .. } => Ok(()),
+        | FactEvent::ContactStateChanged { .. }
+        | FactEvent::HumidityRecorded { .. } => Ok(()),
     }
 }
 
@@ -146,6 +147,13 @@ pub fn apply_event(state: &State, fact: &FactEvent) -> Result<State, ApplyError>
             sensor_id, open, ..
         } => {
             next.contacts.insert(sensor_id.clone(), *open);
+        }
+        FactEvent::HumidityRecorded {
+            sensor_id,
+            permille_rh,
+            ..
+        } => {
+            next.humidities.insert(sensor_id.clone(), *permille_rh);
         }
     }
     Ok(next)
