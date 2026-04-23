@@ -19,5 +19,5 @@ struct Args {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let zigbee2mqtt = load_rusthome_file(&args.data_dir)?.zigbee2mqtt;
-    rusthome_web::run(args.data_dir, &args.bind, None, None, zigbee2mqtt).await
+    rusthome_web::run(args.data_dir, &args.bind, None, None, zigbee2mqtt, None).await
 }

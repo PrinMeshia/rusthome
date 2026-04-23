@@ -3,10 +3,14 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::broadcast;
 use rusthome_app::mqtt_ingest::{dispatch_mqtt_publish, wall_millis};
 use rusthome_app::replay_state;
+use rusthome_app::z2m_bridge_cache::{
+    apply_z2m_bridge_info_payload, z2m_bridge_info_topic, Z2mBridgeCache, Z2mBridgeSnapshot,
+};
 use rusthome_infra::Journal;
 
 use crate::config;
@@ -25,8 +29,18 @@ pub async fn serve_all_in_one(
 
     if no_broker {
         eprintln!("rusthome serve: broker disabled (--no-broker), web dashboard only");
-        return rusthome_web::run(data_dir, &bind, None, None, zigbee2mqtt).await;
+        return rusthome_web::run(data_dir, &bind, None, None, zigbee2mqtt, None).await;
     }
+
+    let (z2m_cache, z2m_bridge_info_topic): (Option<Z2mBridgeCache>, Option<String>) =
+        if let Some(ref zcfg) = zigbee2mqtt {
+            let t = z2m_bridge_info_topic(&zcfg.resolved_topic_prefix());
+            eprintln!("rusthome serve: will subscribe to Z2M bridge info at {t}");
+            let cache: Z2mBridgeCache = Arc::new(Mutex::new(Z2mBridgeSnapshot::default()));
+            (Some(cache), Some(t))
+        } else {
+            (None, None)
+        };
 
     let (live_tx, _) = broadcast::channel::<()>(128);
 
@@ -43,6 +57,11 @@ pub async fn serve_all_in_one(
     link_tx
         .subscribe("commands/#")
         .map_err(|e| format!("subscribe commands error: {e}"))?;
+    if let Some(ref t) = z2m_bridge_info_topic {
+        link_tx
+            .subscribe(t)
+            .map_err(|e| format!("subscribe Z2M bridge/info error: {e}"))?;
+    }
 
     let (web_link_tx, _web_link_rx) = broker
         .link("rusthome-web")
@@ -61,20 +80,31 @@ pub async fn serve_all_in_one(
 
     let ingest_data_dir = data_dir.clone();
     let live_for_ingest = live_tx.clone();
+    let z2m_for_ingest = z2m_cache.clone();
+    let z2m_topic_for_ingest = z2m_bridge_info_topic.clone();
     let ingest_handle = tokio::task::spawn_blocking(move || {
         if let Err(e) = run_ingest_loop(
             &ingest_data_dir,
             &mut link_tx,
             &mut link_rx,
             Some(live_for_ingest),
+            z2m_for_ingest,
+            z2m_topic_for_ingest,
         ) {
             eprintln!("ingest loop error: {e}");
         }
     });
 
     let web_handle = tokio::spawn(async move {
-        if let Err(e) =
-            rusthome_web::run(data_dir, &bind, Some(mqtt_pub), Some(live_tx), zigbee2mqtt).await
+        if let Err(e) = rusthome_web::run(
+            data_dir,
+            &bind,
+            Some(mqtt_pub),
+            Some(live_tx),
+            zigbee2mqtt,
+            z2m_cache,
+        )
+        .await
         {
             eprintln!("web error: {e}");
         }
@@ -123,7 +153,8 @@ fn broker_config(mqtt_port: u16) -> rumqttd::Config {
             next_connection_delay_ms: 1,
             connections: rumqttd::ConnectionSettings {
                 connection_timeout_ms: 5_000,
-                max_payload_size: 4096,
+                // Zigbee2MQTT `bridge/info` can exceed a few kB; keep headroom.
+                max_payload_size: 512 * 1024,
                 max_inflight_count: 100,
                 auth: None,
                 external_auth: None,
@@ -158,6 +189,8 @@ fn run_ingest_loop(
     _link_tx: &mut rumqttd::local::LinkTx,
     link_rx: &mut rumqttd::local::LinkRx,
     live_tx: Option<broadcast::Sender<()>>,
+    z2m_cache: Option<Z2mBridgeCache>,
+    z2m_bridge_info_topic: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rusthome_file = config::load_rusthome_file(data_dir)?;
     let preset = config::resolve_rules_preset(None, &rusthome_file)?;
@@ -170,16 +203,17 @@ fn run_ingest_loop(
     let mut state = replay_state(&journal_path)?;
     let mut last_ts = wall_millis();
 
-    for i in 0..2 {
+    let n_subs = 2 + usize::from(z2m_bridge_info_topic.is_some());
+    for i in 0..n_subs {
         match link_rx.recv() {
             Ok(Some(rumqttd::Notification::DeviceAck(_))) => {
-                eprintln!("ingest: subscription {}/2 acknowledged", i + 1);
+                eprintln!("ingest: subscription {}/{} acknowledged", i + 1, n_subs);
             }
             Ok(Some(other)) => {
-                eprintln!("ingest: unexpected notification {}/2: {other:?}", i + 1);
+                eprintln!("ingest: unexpected notification {}/{}: {other:?}", i + 1, n_subs);
             }
             Ok(None) => {
-                eprintln!("ingest: empty notification {}/2", i + 1);
+                eprintln!("ingest: empty notification {}/{}", i + 1, n_subs);
             }
             Err(e) => {
                 return Err(format!("ingest: recv suback error: {e}").into());
@@ -204,6 +238,20 @@ fn run_ingest_loop(
                     Err(_) => continue,
                 };
                 let payload = &fwd.publish.payload;
+
+                if z2m_bridge_info_topic
+                    .as_deref()
+                    .is_some_and(|t| t == topic)
+                {
+                    if let Some(ref c) = z2m_cache {
+                        if let Ok(mut g) = c.lock() {
+                            if apply_z2m_bridge_info_payload(&mut g, payload) {
+                                eprintln!("ingest: z2m bridge/info permit_join={:?}", g.permit_join);
+                            }
+                        }
+                    }
+                    continue;
+                }
 
                 match dispatch_mqtt_publish(
                     topic,

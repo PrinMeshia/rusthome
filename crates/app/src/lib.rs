@@ -7,6 +7,7 @@ pub mod mqtt_ingest;
 mod pipeline;
 mod reconciliation;
 pub mod rusthome_file;
+pub mod z2m_bridge_cache;
 
 pub use pipeline::{drain_fifo, RunLimits};
 pub use reconciliation::{

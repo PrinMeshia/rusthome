@@ -29,8 +29,9 @@ use futures_util::stream::StreamExt as _;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use rusthome_app::rusthome_file::Zigbee2MqttConfig;
+use rusthome_app::z2m_bridge_cache::{z2m_bridge_info_topic, Z2mBridgeCache};
 
 use crate::html_pages::{
     bluetooth_rows_html, contact_rows_html, journal_rows_html, lights_rows_html,
@@ -62,6 +63,8 @@ struct AppState {
     live_tx: Option<broadcast::Sender<()>>,
     /// Optional `[zigbee2mqtt]` from `rusthome.toml` (permit join via MQTT).
     zigbee2mqtt: Option<Zigbee2MqttConfig>,
+    /// Filled by `rusthome serve` with embedded broker + ingest: last `…/bridge/info` from Zigbee2MQTT.
+    z2m_bridge: Option<Z2mBridgeCache>,
 }
 
 /// Run the Axum server until SIGINT (Ctrl+C). Creates `data_dir` if missing.
@@ -73,12 +76,14 @@ struct AppState {
 /// update from MQTT dispatch notifies `GET /api/live` (SSE) so the dashboard can refresh immediately.
 ///
 /// Pass `zigbee2mqtt` from `{data-dir}/rusthome.toml` to enable Zigbee2MQTT bridge helpers (e.g. permit join).
+/// Pass `z2m_bridge` only from `rusthome serve` (ingest subscribes to `bridge/info`).
 pub async fn run(
     data_dir: PathBuf,
     bind: &str,
     mqtt_pub: Option<MqttPub>,
     live_events: Option<broadcast::Sender<()>>,
     zigbee2mqtt: Option<Zigbee2MqttConfig>,
+    z2m_bridge: Option<Z2mBridgeCache>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&data_dir)?;
 
@@ -88,6 +93,7 @@ pub async fn run(
         mqtt_pub,
         live_tx: live_events,
         zigbee2mqtt,
+        z2m_bridge,
     };
 
     let app = Router::new()
@@ -124,6 +130,7 @@ pub async fn run(
             "/api/zigbee2mqtt/permit_join",
             post(api_zigbee2mqtt_permit_join),
         )
+        .route("/api/zigbee2mqtt/bridge", get(api_zigbee2mqtt_bridge))
         .route("/api/health", get(api_health))
         .with_state(state);
 
@@ -574,14 +581,14 @@ async fn api_zigbee2mqtt_permit_join(
     let Some(ref zcfg) = st.zigbee2mqtt else {
         return (
             StatusCode::NOT_FOUND,
-            "zigbee2mqtt not configured: add [zigbee2mqtt] to rusthome.toml\n",
+            "Zigbee2MQTT non configuré : ajoutez [zigbee2mqtt] dans rusthome.toml.\n",
         )
             .into_response();
     };
     let Some(pub_handle) = &st.mqtt_pub else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            "broker not available (--no-broker mode)\n",
+            "Broker indisponible (mode --no-broker ou rusthome-web seul).\n",
         )
             .into_response();
     };
@@ -604,7 +611,7 @@ async fn api_zigbee2mqtt_permit_join(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("json error: {e}"),
+                format!("erreur JSON : {e}"),
             )
                 .into_response();
         }
@@ -613,15 +620,63 @@ async fn api_zigbee2mqtt_permit_join(
     match tx.publish(topic, bytes::Bytes::from(bytes)) {
         Ok(_) => (
             StatusCode::ACCEPTED,
-            format!("permit join published ({secs} s)\n"),
+            format!("Demande d'appairage publiée sur MQTT (durée indiquée à Zigbee2MQTT : {secs} s).\n"),
         )
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("publish error: {e}\n"),
+            format!("échec publication MQTT : {e}\n"),
         )
             .into_response(),
     }
+}
+
+#[derive(Serialize)]
+struct Z2mBridgeApiResponse {
+    state_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<&'static str>,
+    permit_join: Option<bool>,
+    updated_ms: Option<i64>,
+    /// Topic où Zigbee2MQTT publie l’état (`permit_join`) — indépendant de la détection USB.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bridge_info_topic: Option<String>,
+}
+
+async fn api_zigbee2mqtt_bridge(State(st): State<AppState>) -> impl IntoResponse {
+    let z2m_info_topic = st
+        .zigbee2mqtt
+        .as_ref()
+        .map(|z| z2m_bridge_info_topic(&z.resolved_topic_prefix()));
+    if st.zigbee2mqtt.is_none() {
+        return Json(Z2mBridgeApiResponse {
+            state_available: false,
+            reason: Some("no_zigbee2mqtt_config"),
+            permit_join: None,
+            updated_ms: None,
+            bridge_info_topic: None,
+        })
+        .into_response();
+    }
+    let Some(ref cache) = st.z2m_bridge else {
+        return Json(Z2mBridgeApiResponse {
+            state_available: false,
+            reason: Some("no_embedded_broker_ingest"),
+            permit_join: None,
+            updated_ms: None,
+            bridge_info_topic: z2m_info_topic,
+        })
+        .into_response();
+    };
+    let g = cache.lock().unwrap();
+    Json(Z2mBridgeApiResponse {
+        state_available: true,
+        reason: None,
+        permit_join: g.permit_join,
+        updated_ms: g.updated_ms,
+        bridge_info_topic: z2m_info_topic,
+    })
+    .into_response()
 }
 
 async fn api_command(

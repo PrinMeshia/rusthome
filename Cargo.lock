@@ -1395,6 +1395,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusthome-bridge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "rumqttc",
+ "serde",
+ "serde_json",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rusthome-cli"
 version = "0.1.0"
 dependencies = [

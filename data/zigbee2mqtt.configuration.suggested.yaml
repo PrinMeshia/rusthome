@@ -1,0 +1,37 @@
+# Exemple de configuration Zigbee2MQTT pour une Conbee II / III + broker partagé avec rusthome.
+# Généré aussi par : `rusthome init` → data/zigbee2mqtt.configuration.suggested.yaml
+#
+# Copiez vers le chemin attendu par votre installation Z2M (souvent
+# /opt/zigbee2mqtt/configuration.yaml ou volume Docker) et ADAPTEZ :
+#   - serial.port : chemin stable (obligatoire)
+#   - mqtt : si broker ailleurs que 127.0.0.1:1883
+#
+# Alignement avec rusthome :
+#   - rusthome serve : broker embarqué sur 0.0.0.0:1883 → Z2M → mqtt://127.0.0.1:1883
+#   - data/rusthome.toml : [zigbee2mqtt] mqtt_topic_prefix = même base_topic qu'ici (souvent zigbee2mqtt)
+#
+# Chemin USB stable (recommandé) :
+#   ls -1 /dev/serial/by-id/
+# Exemple Conbee II : usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_XXXXX-if00
+
+homeassistant: false
+
+mqtt:
+  # Broker = celui de `rusthome serve` (port par défaut 1883), ou Mosquitto commun.
+  server: mqtt://127.0.0.1:1883
+  # user: ""
+  # password: ""
+  base_topic: zigbee2mqtt
+  version: 4
+
+serial:
+  # Remplacez par VOTRE lien by-id (voir plus haut).
+  port: /dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2234579-if00
+  adapter: deconz
+
+advanced:
+  log_level: info
+
+# Optionnel : interface web Z2M (port 8080 par défaut si activé selon version)
+# frontend:
+#   port: 8080

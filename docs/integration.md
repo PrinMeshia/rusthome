@@ -16,7 +16,7 @@ Minimal **reproductible** path aligned with Phase 2 of the domotic plan:
 
 **Exploitation** (systemd, backups): [ops-data-dir.md](ops-data-dir.md).
 
-**Zigbee / Conbee** (clé USB, Zigbee2MQTT, broker partagé, appairage) : [zigbee-conbee.md](zigbee-conbee.md).
+**Zigbee / Conbee** (clé USB, Zigbee2MQTT, broker partagé, appairage) : [zigbee-conbee.md](zigbee-conbee.md). **Pont Z2M → contrat MQTT** : binaire [`rusthome-bridge`](../crates/bridge) et guide [adapters-and-bridges.md](adapters-and-bridges.md).
 
 ## Checklist : ajouter un capteur (sans modifier le code rusthome)
 

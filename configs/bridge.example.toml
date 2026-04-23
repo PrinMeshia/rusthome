@@ -1,0 +1,45 @@
+# Example configuration for `rusthome-bridge`.
+# Copy to e.g. `configs/bridge.toml` or `/etc/rusthome/bridge.toml` and adjust.
+#
+# The bridge subscribes to Zigbee2MQTT device topics and republishes to
+# rusthome contract topics (see docs/mqtt-contract.md).
+
+[broker]
+host = "127.0.0.1"
+port = 1883
+# username = "mqtt"
+# password = "secret" # avoid in production
+# Prefer systemd EnvironmentFile + non-committed secrets:
+# password_env = "RUSTHOME_BRIDGE_MQTT_PASSWORD"
+
+[z2m]
+# Must match Zigbee2MQTT `homeassistant: false` default base topic (or your custom base).
+topic_prefix = "zigbee2mqtt"
+
+# One [[devices]] block per Z2M friendly_name (the segment after zigbee2mqtt/).
+[[devices]]
+match_friendly_name = "living_room_sensor"
+[[devices.mapping]]
+json_key = "temperature"
+family = "temperature"
+rusthome_id = "living_room"
+[[devices.mapping]]
+json_key = "humidity"
+family = "humidity"
+rusthome_id = "living_room"
+
+[[devices]]
+match_friendly_name = "front_door_contact"
+[[devices.mapping]]
+# Z2M: contact true = closed → rusthome open = false (handled for json_key "contact").
+json_key = "contact"
+family = "contact"
+rusthome_id = "front_door"
+
+[[devices]]
+match_friendly_name = "hall_motion"
+[[devices.mapping]]
+# Only publishes when occupancy is true (no "clear" event to rusthome).
+json_key = "occupancy"
+family = "motion"
+rusthome_id = "hall"

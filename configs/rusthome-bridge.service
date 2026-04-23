@@ -1,0 +1,28 @@
+[Unit]
+Description=rusthome Zigbee2MQTT → MQTT contract bridge
+Documentation=file:///home/pi/projects/rusthome/docs/adapters-and-bridges.md
+# Start after rusthome when using the embedded broker on the same host.
+After=network-online.target rusthome.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/projects/rusthome
+
+# Optional: MQTT password for the bridge (do not commit real secrets).
+# EnvironmentFile=-/etc/rusthome/bridge.env
+
+ExecStart=/home/pi/projects/rusthome/target/release/rusthome-bridge \
+    --config /home/pi/projects/rusthome/configs/bridge.toml
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rusthome-bridge
+
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

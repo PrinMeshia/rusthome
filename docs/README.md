@@ -12,6 +12,7 @@ Index of files under `docs/` — avoid duplicating detail in the root [README](.
 | [errors.md](errors.md) | Taxonomy: domain / pipeline / infra errors (§14.6–14.8) |
 | [reconciliation.md](reconciliation.md) | Journal ↔ world, Observed / Derived (§14.7) |
 | [integration.md](integration.md) | Edge adapters, examples, `rusthome serve` / `rusthome-web` lab UI, CLI vs library |
+| [adapters-and-bridges.md](adapters-and-bridges.md) | Core vs bridges, `rusthome-bridge`, Z2M → contrat MQTT, ops / TLS / versioning |
 | [zigbee-conbee.md](zigbee-conbee.md) | Clé Conbee / Zigbee : Zigbee2MQTT, broker partagé, appairage, mapping MQTT |
 | [web-proxy.md](web-proxy.md) | TLS + reverse proxy (Caddy / nginx) in front of the lab web UI |
 | [io-lifecycle.md](io-lifecycle.md) | `CommandIo` cycle §6.16 |

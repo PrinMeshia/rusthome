@@ -80,6 +80,7 @@ pub(crate) fn dev_footer_system() -> String {
         ("/api/bluetooth", "Bluetooth JSON"),
         ("/api/bluetooth/device?addr=…&scan=10", "Présence MAC + scan opt."),
         ("/api/bluetooth/info?addr=…", "Infos bluetoothctl"),
+        ("/api/zigbee2mqtt/bridge", "GET état permit_join Z2M"),
         ("/api/zigbee2mqtt/permit_join", "POST permit join Z2M"),
         ("/api/health", "Santé"),
     ])
@@ -581,6 +582,7 @@ pub(crate) fn zigbee2mqtt_panel_html(cfg: &Zigbee2MqttConfig, broker_available: 
     let prefix = cfg.resolved_topic_prefix();
     let prefix_esc = esc_html(&prefix);
     let topic_esc = esc_html(&format!("{prefix}/bridge/request"));
+    let info_topic_esc = esc_html(&format!("{}/bridge/info", prefix.trim_matches('/')));
     let secs = cfg.resolved_permit_join_seconds();
     let broker_note = if broker_available {
         r#"<p class="bt-hint">Broker MQTT intégré : la requête est publiée sur le topic bridge Zigbee2MQTT.</p>"#
@@ -592,7 +594,12 @@ pub(crate) fn zigbee2mqtt_panel_html(cfg: &Zigbee2MqttConfig, broker_available: 
         r##"<section class="card wide z2m-card" id="z2m-section">
   <h2>Zigbee2MQTT — appairage</h2>
   {broker_note}
-  <p class="bt-hint">Préfixe MQTT : <code class="mono">{prefix_esc}</code> → <code class="mono">{topic_esc}</code>. Zigbee2MQTT doit être connecté au <strong>même broker</strong> que rusthome. Documentation : <span class="mono">docs/zigbee-conbee.md</span>.</p>
+  <p class="bt-hint">Préfixe MQTT : <code class="mono">{prefix_esc}</code> → requêtes <code class="mono">{topic_esc}</code>. Zigbee2MQTT doit être connecté au <strong>même broker</strong> que rusthome. Documentation : <span class="mono">docs/zigbee-conbee.md</span>.</p>
+  <p class="bt-hint z2m-hint-usb">La section <strong>Ports série USB</strong> (ci-dessus) reflète le matériel branché. La pastille d&apos;appairage utilise uniquement le flux MQTT <code class="mono">{info_topic_esc}</code> (émis par Zigbee2MQTT) : voir le même dongle en USB n&apos;implique pas encore que Z2M publie sur ce broker.</p>
+  <div class="z2m-join-line" id="z2m-join-line" role="status" aria-live="polite">
+    <span class="z2m-join-label">&Eacute;tat r&eacute;seau Zigbee (appairage)</span>
+    <span id="z2m-permit-join-badge" class="z2m-permit-join-badge" data-state="unknown">Chargement…</span>
+  </div>
   <div class="z2m-row">
     <button type="button" id="z2m-permit-btn" class="bt-mac-btn"{disabled}>Autoriser l&apos;appairage ({secs} s)</button>
     <span id="z2m-permit-status" class="cell-muted" role="status" aria-live="polite"></span>
@@ -601,6 +608,7 @@ pub(crate) fn zigbee2mqtt_panel_html(cfg: &Zigbee2MqttConfig, broker_available: 
         broker_note = broker_note,
         prefix_esc = prefix_esc,
         topic_esc = topic_esc,
+        info_topic_esc = info_topic_esc,
         secs = secs,
         disabled = disabled,
     )

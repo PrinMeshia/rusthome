@@ -1,0 +1,8 @@
+# Written by `rusthome init` — edit as needed. See configs/rusthome.example.toml for all options.
+
+rules_preset = "home"
+
+# Zigbee2MQTT on the same broker as `rusthome serve` (e.g. 127.0.0.1:1883). Needed for System UI permit join + bridge API.
+[zigbee2mqtt]
+mqtt_topic_prefix = "zigbee2mqtt"
+permit_join_seconds = 120

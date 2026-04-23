@@ -333,6 +333,53 @@
     }
   }
 
+  async function refreshZ2mBridgeBadge() {
+    const badge = $('z2m-permit-join-badge');
+    if (!badge) return;
+    try {
+      const res = await fetch('/api/zigbee2mqtt/bridge');
+      const j = await res.json();
+      if (!j.state_available) {
+        badge.setAttribute('data-state', 'na');
+        if (j.reason === 'no_zigbee2mqtt_config') {
+          badge.textContent = 'Non configur\u00E9 ([zigbee2mqtt] dans rusthome.toml)';
+        } else {
+          badge.textContent =
+            'Indisponible (rusthome serve + broker int\u00E9gr\u00E9 requis pour l\u2019\u00E9tat MQTT)';
+        }
+        badge.title = '';
+        return;
+      }
+      if (j.permit_join === true) {
+        badge.setAttribute('data-state', 'open');
+        badge.textContent = 'R\u00E9seau ouvert \u00E0 l\u2019appairage';
+        badge.title = '';
+      } else if (j.permit_join === false) {
+        badge.setAttribute('data-state', 'closed');
+        badge.textContent = 'R\u00E9seau ferm\u00E9 (pas d\u2019appairage)';
+        badge.title = '';
+      } else {
+        badge.setAttribute('data-state', 'unknown');
+        var topic = j.bridge_info_topic || '…/bridge/info';
+        badge.textContent =
+          'Aucun message re\u00E7u sur ' + topic + ' (d\u00E9marrez Z2M vers ce broker)';
+        badge.title =
+          'Ce n\u2019est pas la d\u00E9tection USB : Zigbee2MQTT doit publier l\u2019\u00E9tat ' +
+          'du coordinateur sur ce topic. V\u00E9rifiez l\u2019adresse du broker dans la config Z2M (ex. 127.0.0.1:1883).';
+      }
+      if (j.updated_ms != null) {
+        badge.title =
+          (badge.title ? badge.title + ' \u2014 ' : '') +
+          'Derni\u00E8re r\u00E9ception : ' +
+          new Date(j.updated_ms).toLocaleString('fr-FR');
+      }
+    } catch (e) {
+      badge.setAttribute('data-state', 'error');
+      badge.textContent = 'Erreur de lecture de l\u2019\u00E9tat';
+      badge.title = String(e);
+    }
+  }
+
   async function refresh() {
     errEl.classList.remove('visible');
     errEl.textContent = '';
@@ -362,6 +409,8 @@
         $('tbody-bluetooth').innerHTML = '<tr><td colspan="2" class="cell-empty">' +
           esc('API Bluetooth : ' + btText) + '</td></tr>';
       }
+
+      await refreshZ2mBridgeBadge();
 
       consecutiveFails = 0;
       if (updatedEl) {
@@ -427,11 +476,15 @@
         });
         var text = await res.text();
         z2mStatus.textContent = text.trim();
+        setTimeout(refreshZ2mBridgeBadge, 500);
       } catch (e) {
         z2mStatus.textContent = String(e);
       }
     });
   }
   schedule();
+  if ($('z2m-permit-join-badge')) {
+    setInterval(refreshZ2mBridgeBadge, 3000);
+  }
   refresh();
 })();

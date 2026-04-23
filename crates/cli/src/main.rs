@@ -1,4 +1,5 @@
 mod config;
+mod init;
 mod serve;
 
 use std::path::{Path, PathBuf};
@@ -105,6 +106,12 @@ enum Commands {
         #[arg(long, default_value_t = 50)]
         count: u32,
     },
+    /// Create starter files in the data dir: `rusthome.toml` + Zigbee2MQTT YAML template (skip if present; use `--force` to overwrite).
+    Init {
+        /// Overwrite existing `rusthome.toml` / `zigbee2mqtt.configuration.suggested.yaml`.
+        #[arg(long, default_value_t = false)]
+        force: bool,
+    },
     /// All-in-one: embedded MQTT broker + ingest adapter + web dashboard.
     Serve {
         #[arg(long, default_value = "127.0.0.1:8080")]
@@ -170,6 +177,11 @@ fn save_snapshot(data_dir: &Path, rules_digest: &str) -> Result<(), Box<dyn std:
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     std::fs::create_dir_all(&cli.data_dir)?;
+
+    if let Commands::Init { force } = &cli.command {
+        init::run(&cli.data_dir, *force)?;
+        return Ok(());
+    }
 
     if let Commands::Serve {
         bind,
@@ -436,6 +448,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let ms = t0.elapsed().as_millis();
             println!("bench_emit count={count} elapsed_ms={ms}");
         }
+        Commands::Init { .. } => unreachable!("handled above"),
         Commands::Serve { .. } => unreachable!("handled above"),
     }
 

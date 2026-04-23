@@ -62,6 +62,7 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 | **rusthome-infra** | **Canonical** JSON Lines journal §8.3, `JournalAppend` / `JournalAppendOutcome` (command dedup §14.3), sort, timestamp gate, snapshot + `state_hash`, `repair_journal`, optional `fsync` |
 | **rusthome-cli**   | `rusthome` binary (clap)                                                                                                                                       |
 | **rusthome-web**   | Library + `rusthome-web` binary; also **`rusthome serve`** (CLI) — read-only Axum: dashboard `/`, system `/system`, JSON APIs incl. `/api/system` (lab; default bind `127.0.0.1:8080`) |
+| **rusthome-bridge** | Optional binary: subscribes to Zigbee2MQTT topics, republishes [mqtt-contract.md](mqtt-contract.md) `sensors/…` on the same broker ([adapters-and-bridges.md](adapters-and-bridges.md)) |
 
 
 **No wall clock** in domain logic: CLI requires explicit `--timestamp` on `emit`; runner uses `Instant` only for run time budget (§6.6.3), not event ordering.

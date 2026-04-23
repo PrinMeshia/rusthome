@@ -4,3 +4,6 @@
 # Default CLI --data-dir (local journal / snapshot)
 /data/events.jsonl
 /data/snapshot.json
+
+# Local bridge config (copy from configs/bridge.example.toml)
+/configs/bridge.toml

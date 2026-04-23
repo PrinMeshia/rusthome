@@ -838,6 +838,44 @@ th.subhdr {
   gap: var(--space-sm);
   align-items: center;
 }
+.z2m-join-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-small);
+}
+.z2m-join-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+.z2m-permit-join-badge {
+  font-weight: 650;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text);
+}
+.z2m-permit-join-badge[data-state="open"] {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: var(--on);
+}
+.z2m-permit-join-badge[data-state="closed"] {
+  color: var(--muted);
+}
+.z2m-permit-join-badge[data-state="unknown"],
+.z2m-permit-join-badge[data-state="na"] {
+  color: var(--muted);
+  font-weight: 500;
+}
+.z2m-permit-join-badge[data-state="error"] {
+  background: var(--err-bg);
+  border-color: var(--err-border);
+  color: var(--error);
+}
 .z2m-row {
   display: flex;
   flex-wrap: wrap;

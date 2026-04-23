@@ -1,0 +1,6 @@
+# Local data-dir config (optional). See configs/rusthome.example.toml.
+# Without [zigbee2mqtt], GET /api/zigbee2mqtt/bridge returns reason "no_zigbee2mqtt_config".
+
+[zigbee2mqtt]
+mqtt_topic_prefix = "zigbee2mqtt"
+# permit_join_seconds = 120
