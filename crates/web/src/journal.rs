@@ -2,9 +2,7 @@
 
 use std::path::Path;
 
-use rusthome_core::{
-    CommandEvent, Event, EventKind, FactEvent, ObservationEvent,
-};
+use rusthome_core::{CommandEvent, Event, EventKind, FactEvent, ObservationEvent};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]

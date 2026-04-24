@@ -5,7 +5,8 @@ mod common;
 use std::path::Path;
 
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
-use rusthome_core::{ConfigSnapshot, ObservationEvent, State, StateView};
+use rusthome_app::ConfigSnapshot;
+use rusthome_core::{ObservationEvent, State, StateView};
 use rusthome_infra::Journal;
 use rusthome_rules::RulesPreset;
 use uuid::Uuid;
@@ -34,9 +35,7 @@ fn home_one_motion_journal_shorter_than_v0() {
         &reg_h,
         &cfg,
         0,
-        ObservationEvent::MotionDetected {
-            room: room.clone(),
-        },
+        ObservationEvent::MotionDetected { room: room.clone() },
         causal,
         limits.clone(),
     )
@@ -52,9 +51,7 @@ fn home_one_motion_journal_shorter_than_v0() {
         &reg_v,
         &cfg,
         0,
-        ObservationEvent::MotionDetected {
-            room: room.clone(),
-        },
+        ObservationEvent::MotionDetected { room: room.clone() },
         causal,
         limits,
     )

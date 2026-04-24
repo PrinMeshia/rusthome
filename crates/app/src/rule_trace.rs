@@ -1,8 +1,8 @@
-//! Rule evaluation trace — plan §15 (matched / not matched).
+//! Rule evaluation trace — plan §15 (matched / not matched). Serialized by CLI `--trace-file`.
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::EventKind;
+use rusthome_core::EventKind;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuleEvaluationRecord {

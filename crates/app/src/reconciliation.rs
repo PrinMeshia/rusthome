@@ -3,15 +3,14 @@
 use std::collections::VecDeque;
 
 use rusthome_core::{
-    validate_fact_for_append, ConfigSnapshot, Event, FactEvent, LightActuatorState, Provenance,
-    RuleEvaluationRecord, RunError, State, StateView,
+    validate_fact_for_append, Event, FactEvent, LightActuatorState, Provenance, State, StateView,
 };
 use rusthome_infra::{Journal, JournalAppend};
 use rusthome_rules::Registry;
 use uuid::Uuid;
 
 use crate::pipeline::drain_fifo;
-use crate::RunLimits;
+use crate::{ConfigSnapshot, RuleEvaluationRecord, RunError, RunLimits};
 
 /// Parameters for an **Observed** `LightOn` / `LightOff` append (not from rules).
 #[derive(Debug, Clone)]

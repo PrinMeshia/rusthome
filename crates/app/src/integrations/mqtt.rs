@@ -11,12 +11,18 @@
 //! | `commands/light/{room}/on` | `CommandEvent::TurnOnLight` |
 //! | `commands/light/{room}/off` | `CommandEvent::TurnOffLight` |
 //!
-//! Used by the embedded broker (`rusthome serve`) and the standalone
-//! `mqtt_motion_ingest` example (backward-compatible).
+//! Used by the embedded broker (`rusthome serve` with CLI `--features serve`) and the standalone
+//! `mqtt_motion_ingest` example.
+//!
+//! **Timestamps:** this path uses wall-clock milliseconds plus [`next_ts`] monotonicity — it is
+//! **not** the same contract as `emit --timestamp` (explicit logical time) for bit-for-bit
+//! journal reproducibility.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rusthome_core::{CommandEvent, ConfigSnapshot, ObservationEvent, RunError, State};
+use rusthome_core::{CommandEvent, ObservationEvent, State};
+
+use crate::{ConfigSnapshot, RunError};
 use rusthome_infra::Journal;
 use rusthome_rules::Registry;
 use uuid::Uuid;
@@ -138,10 +144,7 @@ pub fn observation_from_mqtt(
 /// Classify an MQTT publish into a `CommandEvent`.
 ///
 /// Returns `None` if the topic doesn't match any known command pattern.
-pub fn command_from_mqtt(
-    topic: &str,
-    _payload: &[u8],
-) -> Result<Option<CommandEvent>, String> {
+pub fn command_from_mqtt(topic: &str, _payload: &[u8]) -> Result<Option<CommandEvent>, String> {
     let rest = match topic.strip_prefix("commands/") {
         Some(r) => r,
         None => return Ok(None),
@@ -240,7 +243,9 @@ pub fn dispatch_mqtt_publish(
             let ts = next_ts(last_ts, candidate);
             let causal = Uuid::new_v4();
             let desc = format!("{obs:?}");
-            ingest_observation_with_causal(journal, state, registry, config, ts, obs, causal, limits)?;
+            ingest_observation_with_causal(
+                journal, state, registry, config, ts, obs, causal, limits,
+            )?;
             return Ok(Some(desc));
         }
         Err(e) => return Err(DispatchError::Parse(e)),
@@ -284,8 +289,7 @@ mod tests {
 
     #[test]
     fn motion_json_payload() {
-        let obs =
-            observation_from_mqtt("sensors/motion/x", br#"{"room":"kitchen"}"#).unwrap();
+        let obs = observation_from_mqtt("sensors/motion/x", br#"{"room":"kitchen"}"#).unwrap();
         assert!(matches!(
             obs,
             Some(ObservationEvent::MotionDetected { room }) if room == "kitchen"
@@ -308,11 +312,8 @@ mod tests {
 
     #[test]
     fn temperature_celsius_float() {
-        let obs = observation_from_mqtt(
-            "sensors/temperature/living",
-            br#"{"celsius": 21.5}"#,
-        )
-        .unwrap();
+        let obs =
+            observation_from_mqtt("sensors/temperature/living", br#"{"celsius": 21.5}"#).unwrap();
         assert!(matches!(
             obs,
             Some(ObservationEvent::TemperatureReading { millidegrees_c, .. })
@@ -322,8 +323,7 @@ mod tests {
 
     #[test]
     fn temperature_raw_integer() {
-        let obs =
-            observation_from_mqtt("sensors/temperature/attic", b"19200").unwrap();
+        let obs = observation_from_mqtt("sensors/temperature/attic", b"19200").unwrap();
         assert!(matches!(
             obs,
             Some(ObservationEvent::TemperatureReading { millidegrees_c, .. })
@@ -343,8 +343,7 @@ mod tests {
 
     #[test]
     fn contact_closed_string() {
-        let obs =
-            observation_from_mqtt("sensors/contact/window", b"closed").unwrap();
+        let obs = observation_from_mqtt("sensors/contact/window", b"closed").unwrap();
         assert!(matches!(
             obs,
             Some(ObservationEvent::ContactChanged { open: false, .. })
@@ -353,8 +352,7 @@ mod tests {
 
     #[test]
     fn contact_zigbee2mqtt_convention() {
-        let obs =
-            observation_from_mqtt("sensors/contact/gate", br#"{"contact": true}"#).unwrap();
+        let obs = observation_from_mqtt("sensors/contact/gate", br#"{"contact": true}"#).unwrap();
         assert!(matches!(
             obs,
             Some(ObservationEvent::ContactChanged { open: false, .. })
@@ -363,11 +361,8 @@ mod tests {
 
     #[test]
     fn humidity_permille_json() {
-        let obs = observation_from_mqtt(
-            "sensors/humidity/bath",
-            br#"{"permille_rh": 655}"#,
-        )
-        .unwrap();
+        let obs =
+            observation_from_mqtt("sensors/humidity/bath", br#"{"permille_rh": 655}"#).unwrap();
         assert!(matches!(
             obs,
             Some(ObservationEvent::HumidityReading { sensor_id, permille_rh })
@@ -377,11 +372,8 @@ mod tests {
 
     #[test]
     fn humidity_percent_json() {
-        let obs = observation_from_mqtt(
-            "sensors/humidity/living",
-            br#"{"humidity": 42.3}"#,
-        )
-        .unwrap();
+        let obs =
+            observation_from_mqtt("sensors/humidity/living", br#"{"humidity": 42.3}"#).unwrap();
         assert!(matches!(
             obs,
             Some(ObservationEvent::HumidityReading { permille_rh, .. })

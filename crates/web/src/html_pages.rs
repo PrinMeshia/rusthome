@@ -16,8 +16,7 @@ pub(crate) enum NavPage {
 }
 
 pub(crate) fn main_nav_html(active: NavPage) -> String {
-    let mut out =
-        String::from(r#"<nav class="app-nav" aria-label="Navigation principale">"#);
+    let mut out = String::from(r#"<nav class="app-nav" aria-label="Navigation principale">"#);
     let items = [
         (NavPage::Dashboard, "/", "Tableau de bord"),
         (NavPage::Sensors, "/sensors", "Capteurs"),
@@ -68,7 +67,10 @@ pub(crate) fn dev_footer_sensors() -> String {
     dev_footer_inner(&[
         ("/api/state", "État JSON"),
         ("/api/sensor-display", "Métadonnées capteurs JSON"),
-        ("/api/sensor-display/sync-from-state", "POST synchro libellés"),
+        (
+            "/api/sensor-display/sync-from-state",
+            "POST synchro libellés",
+        ),
         ("/api/observation", "POST observation MQTT test"),
         ("/docs/mqtt-contract", "Contrat MQTT"),
     ])
@@ -78,7 +80,10 @@ pub(crate) fn dev_footer_system() -> String {
     dev_footer_inner(&[
         ("/api/system", "Système JSON"),
         ("/api/bluetooth", "Bluetooth JSON"),
-        ("/api/bluetooth/device?addr=…&scan=10", "Présence MAC + scan opt."),
+        (
+            "/api/bluetooth/device?addr=…&scan=10",
+            "Présence MAC + scan opt.",
+        ),
         ("/api/bluetooth/info?addr=…", "Infos bluetoothctl"),
         ("/api/zigbee2mqtt/permit_join", "POST permit join Z2M"),
         ("/api/health", "Santé"),
@@ -152,7 +157,11 @@ pub(crate) const DASHBOARD_JOURNAL_ROWS: usize = 40;
 
 pub(crate) fn summary_cards_html(state: &CoreState, journal_count: usize) -> String {
     let rooms = state.light_room_rows().len();
-    let lights_on = state.light_room_rows().iter().filter(|(_, on, _)| *on).count();
+    let lights_on = state
+        .light_room_rows()
+        .iter()
+        .filter(|(_, on, _)| *on)
+        .count();
     let temp_count = state.temperature_readings().len();
     let humidity_count = state.humidity_readings().len();
     let contact_count = state.contact_states().len();
@@ -315,7 +324,8 @@ pub(crate) fn humidity_rows_html(state: &CoreState) -> String {
 
 pub(crate) fn contact_rows_html(state: &CoreState) -> String {
     if state.contact_states().is_empty() {
-        return r#"<tr><td colspan="4" class="cell-empty"><em>Aucun contact</em></td></tr>"#.to_string();
+        return r#"<tr><td colspan="4" class="cell-empty"><em>Aucun contact</em></td></tr>"#
+            .to_string();
     }
     let mut out = String::new();
     for (sensor_id, open) in state.contact_states() {
@@ -345,10 +355,7 @@ fn kv_row_th(label: &str, value: &str) -> String {
 pub(crate) fn system_rusthome_rows(s: &system_info::SystemSnapshot) -> String {
     let mut rows = String::new();
     rows.push_str(&kv_row_th("Service", &s.service));
-    rows.push_str(&kv_row_th(
-        "Version rusthome-web",
-        &s.rusthome_version,
-    ));
+    rows.push_str(&kv_row_th("Version rusthome-web", &s.rusthome_version));
     rows.push_str(&kv_row_th("Adresse d’écoute", &s.listen));
     rows.push_str(&kv_row_th("Répertoire de données", &s.data_dir));
     rows.push_str(&kv_row_th("Fichier journal", &s.journal_path));
@@ -363,18 +370,12 @@ pub(crate) fn system_rusthome_rows(s: &system_info::SystemSnapshot) -> String {
 
 pub(crate) fn system_host_rows(s: &system_info::SystemSnapshot) -> String {
     let mut rows = String::new();
-    rows.push_str(&kv_row_th(
-        "Nom d’hôte",
-        &system_info::opt_str(&s.hostname),
-    ));
+    rows.push_str(&kv_row_th("Nom d’hôte", &system_info::opt_str(&s.hostname)));
     rows.push_str(&kv_row_th(
         "OS",
         &system_info::opt_str(&s.os_long.clone().or(s.os_name.clone())),
     ));
-    rows.push_str(&kv_row_th(
-        "Noyau",
-        &system_info::opt_str(&s.kernel),
-    ));
+    rows.push_str(&kv_row_th("Noyau", &system_info::opt_str(&s.kernel)));
     rows.push_str(&kv_row_th("Architecture CPU", &s.cpu_arch));
     rows.push_str(&kv_row_th(
         "Durée de fonctionnement",
@@ -415,10 +416,7 @@ pub(crate) fn system_resource_rows(s: &system_info::SystemSnapshot) -> String {
     };
     rows.push_str(&kv_row_th("Swap", &swap_s));
 
-    rows.push_str(&kv_row_th(
-        "CPU (logiques)",
-        &s.cpu_count.to_string(),
-    ));
+    rows.push_str(&kv_row_th("CPU (logiques)", &s.cpu_count.to_string()));
     rows.push_str(&kv_row_th(
         "Utilisation CPU",
         &format!("{:.1} %", s.cpu_usage_percent),
@@ -493,10 +491,7 @@ pub(crate) fn bluetooth_rows_html(s: &bluetooth_info::BluetoothSnapshot) -> Stri
             ));
         }
         rows.push_str(&kv_row_th("Alimenté", tri_bool_label(a.powered)));
-        rows.push_str(&kv_row_th(
-            "Visible",
-            tri_bool_label(a.discoverable),
-        ));
+        rows.push_str(&kv_row_th("Visible", tri_bool_label(a.discoverable)));
         rows.push_str(&kv_row_th("Appairable", tri_bool_label(a.pairable)));
     }
     if !s.devices.is_empty() {

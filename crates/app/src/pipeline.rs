@@ -4,12 +4,15 @@ use std::collections::{HashSet, VecDeque};
 use std::time::Instant;
 
 use rusthome_core::{
-    apply_event, validate_fact_for_append, ApplyError, ConfigSnapshot, ErrorOccurredEvent, Event,
-    FactEvent, JournalEntry, PhysicalProjectionMode, Provenance, RuleContext, RuleEvaluationRecord,
-    RunError, State,
+    apply_event, validate_fact_for_append, ApplyError, ErrorOccurredEvent, Event, FactEvent,
+    HostRuntimeConfig, PhysicalProjectionMode, Provenance, RuleContext, State,
 };
-use rusthome_infra::{Journal, JournalAppend, JournalAppendOutcome};
+use rusthome_journal::JournalEntry;
 use rusthome_rules::Registry;
+
+use rusthome_infra::{Journal, JournalAppend, JournalAppendOutcome};
+
+use crate::{RuleEvaluationRecord, RunError};
 
 /// Append `ErrorOccurred` before surfacing the error (best-effort; if that append fails too, ignore — bootstrap paradox §8.1).
 fn append_pipeline_error_best_effort(
@@ -76,8 +79,8 @@ struct Emission {
 }
 
 /// §14.5 — in IoAnchored, forbid appending a derived "physical" actuator fact without an IO path.
-fn check_io_anchored_emission(event: &Event, config: &ConfigSnapshot) -> Result<(), RunError> {
-    if config.physical_projection_mode != PhysicalProjectionMode::IoAnchored {
+fn check_io_anchored_emission(event: &Event, config: &dyn HostRuntimeConfig) -> Result<(), RunError> {
+    if config.physical_projection_mode() != PhysicalProjectionMode::IoAnchored {
         return Ok(());
     }
     match event {
@@ -98,7 +101,7 @@ fn check_io_anchored_emission(event: &Event, config: &ConfigSnapshot) -> Result<
 fn collect_emissions_and_traces(
     registry: &Registry,
     entry: &JournalEntry,
-    config: &ConfigSnapshot,
+    config: &dyn HostRuntimeConfig,
     state: &State,
 ) -> (Vec<Emission>, Vec<RuleEvaluationRecord>) {
     let ctx = RuleContext {
@@ -174,7 +177,7 @@ pub fn drain_fifo(
     journal: &mut Journal,
     state: &mut State,
     registry: &Registry,
-    config: &ConfigSnapshot,
+    config: &dyn HostRuntimeConfig,
     mut queue: VecDeque<JournalEntry>,
     limits: RunLimits,
     mut rule_trace: Option<&mut Vec<RuleEvaluationRecord>>,
@@ -276,16 +279,16 @@ pub fn drain_fifo(
 mod tests {
     use std::collections::VecDeque;
 
-    use rusthome_core::{
-        ConfigSnapshot, Event, ObservationEvent, RunError, State,
-    };
+    use rusthome_core::{Event, ObservationEvent, State};
+
+    use crate::{ConfigSnapshot, RunError};
     use rusthome_infra::{Journal, JournalAppend};
     use rusthome_rules::Registry;
     use uuid::Uuid;
 
-    use super::{drain_fifo, RunLimits};
+    use super::{drain_fifo, JournalEntry, RunLimits};
 
-    fn motion_entry(journal: &mut Journal, room: &str) -> rusthome_core::JournalEntry {
+    fn motion_entry(journal: &mut Journal, room: &str) -> JournalEntry {
         journal
             .append(JournalAppend {
                 timestamp: 0,
@@ -296,9 +299,7 @@ mod tests {
                 event_id: None,
                 correlation_id: None,
                 trace_id: None,
-                event: Event::Observation(ObservationEvent::MotionDetected {
-                    room: room.into(),
-                }),
+                event: Event::Observation(ObservationEvent::MotionDetected { room: room.into() }),
             })
             .unwrap()
             .expect_committed()
@@ -319,16 +320,8 @@ mod tests {
             max_events_per_run: 1,
             ..RunLimits::default()
         };
-        let err = drain_fifo(
-            &mut journal,
-            &mut state,
-            &reg,
-            &config,
-            queue,
-            limits,
-            None,
-        )
-        .expect_err("second dequeue should exceed max_events_per_run");
+        let err = drain_fifo(&mut journal, &mut state, &reg, &config, queue, limits, None)
+            .expect_err("second dequeue should exceed max_events_per_run");
         assert!(matches!(err, RunError::MaxEventsPerRun { .. }));
     }
 
@@ -347,19 +340,8 @@ mod tests {
             max_events_generated_per_root: 1,
             ..RunLimits::default()
         };
-        let err = drain_fifo(
-            &mut journal,
-            &mut state,
-            &reg,
-            &config,
-            queue,
-            limits,
-            None,
-        )
-        .expect_err("V0 cascade appends more than one synthetic from root");
-        assert!(matches!(
-            err,
-            RunError::MaxEventsGeneratedPerRoot { .. }
-        ));
+        let err = drain_fifo(&mut journal, &mut state, &reg, &config, queue, limits, None)
+            .expect_err("V0 cascade appends more than one synthetic from root");
+        assert!(matches!(err, RunError::MaxEventsGeneratedPerRoot { .. }));
     }
 }

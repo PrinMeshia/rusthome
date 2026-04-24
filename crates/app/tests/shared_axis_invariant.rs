@@ -2,8 +2,10 @@
 
 mod common;
 
+use rusthome_app::RunError;
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
-use rusthome_core::{ApplyError, ConfigSnapshot, ObservationEvent, RunError, State};
+use rusthome_app::ConfigSnapshot;
+use rusthome_core::{ApplyError, ObservationEvent, State};
 use rusthome_infra::Journal;
 use rusthome_rules::Registry;
 use uuid::Uuid;
@@ -25,9 +27,7 @@ fn second_motion_same_room_is_light_already_on() {
         &reg,
         &cfg,
         0,
-        ObservationEvent::MotionDetected {
-            room: room.clone(),
-        },
+        ObservationEvent::MotionDetected { room: room.clone() },
         Uuid::from_u128(1),
         limits.clone(),
     )

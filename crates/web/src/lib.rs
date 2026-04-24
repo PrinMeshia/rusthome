@@ -12,8 +12,8 @@ mod util;
 
 use std::convert::Infallible;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use axum::{
     extract::{Query, State},
@@ -26,15 +26,15 @@ use axum::{
     Json, Router,
 };
 use futures_util::stream::StreamExt as _;
+use rusthome_app::rusthome_file::Zigbee2MqttConfig;
+use serde::Deserialize;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
-use serde::Deserialize;
-use rusthome_app::rusthome_file::Zigbee2MqttConfig;
 
 use crate::html_pages::{
-    bluetooth_rows_html, contact_rows_html, journal_rows_html, lights_rows_html,
-    humidity_rows_html, render_dashboard_page, render_sensors_page, render_system_page,
+    bluetooth_rows_html, contact_rows_html, humidity_rows_html, journal_rows_html,
+    lights_rows_html, render_dashboard_page, render_sensors_page, render_system_page,
     sensors_rows_html, summary_cards_html, system_host_rows, system_resource_rows,
     system_rusthome_rows, system_serial_rows_html, temperature_rows_html, zigbee2mqtt_panel_html,
     DASHBOARD_JOURNAL_ROWS,
@@ -96,10 +96,7 @@ pub async fn run(
         .route("/static/dashboard.js", get(serve_dashboard_js))
         .route("/static/sensors.js", get(serve_sensors_js))
         .route("/static/system.js", get(serve_system_js))
-        .route(
-            "/docs/mqtt-contract",
-            get(serve_mqtt_contract_markdown),
-        )
+        .route("/docs/mqtt-contract", get(serve_mqtt_contract_markdown))
         .route("/", get(page_dashboard))
         .route("/sensors", get(page_sensors))
         .route("/system", get(page_system))
@@ -162,12 +159,13 @@ async fn api_live_sse(State(st): State<AppState>) -> impl IntoResponse {
         Ok::<Event, Infallible>(Event::default().data("{}"))
     });
 
-    Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(25))
-            .text("ping"),
-    )
-    .into_response()
+    Sse::new(stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(25))
+                .text("ping"),
+        )
+        .into_response()
 }
 
 async fn serve_app_css() -> impl IntoResponse {
@@ -212,10 +210,7 @@ async fn serve_mqtt_contract_markdown() -> impl IntoResponse {
     (
         [
             (header::CONTENT_TYPE, "text/markdown; charset=utf-8"),
-            (
-                header::CACHE_CONTROL,
-                "public, max-age=3600",
-            ),
+            (header::CACHE_CONTROL, "public, max-age=3600"),
         ],
         MD,
     )
@@ -511,7 +506,9 @@ fn observation_topic_and_payload(req: &ObservationRequest) -> Result<(String, Ve
                 }
                 ((pct * 10.0).round() as i32).clamp(0, 1000)
             } else {
-                return Err("humidité : renseignez percent_rh (0–100) ou permille_rh (0–1000)".into());
+                return Err(
+                    "humidité : renseignez percent_rh (0–100) ou permille_rh (0–1000)".into(),
+                );
             };
             let topic = format!("sensors/humidity/{entity}");
             let payload = serde_json::to_vec(&serde_json::json!({ "permille_rh": permille }))
@@ -523,8 +520,8 @@ fn observation_topic_and_payload(req: &ObservationRequest) -> Result<(String, Ve
                 .open
                 .ok_or_else(|| "contact : indiquez open (true ou false)".to_string())?;
             let topic = format!("sensors/contact/{entity}");
-            let payload =
-                serde_json::to_vec(&serde_json::json!({ "open": open })).map_err(|e| e.to_string())?;
+            let payload = serde_json::to_vec(&serde_json::json!({ "open": open }))
+                .map_err(|e| e.to_string())?;
             Ok((topic, payload))
         }
         _ => Err("type inconnu : motion, temperature, humidity ou contact".into()),
@@ -548,11 +545,7 @@ async fn api_observation(
     };
     let mut tx = pub_handle.lock().unwrap();
     match tx.publish(topic, bytes::Bytes::from(payload)) {
-        Ok(_) => (
-            StatusCode::ACCEPTED,
-            "observation published",
-        )
-            .into_response(),
+        Ok(_) => (StatusCode::ACCEPTED, "observation published").into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("publish error: {e}"),
@@ -762,7 +755,8 @@ async fn api_bluetooth_device(Query(q): Query<BluetoothDeviceQuery>) -> impl Int
         )
             .into_response();
     }
-    match tokio::task::spawn_blocking(move || bluetooth_info::lookup_device(&q.addr, q.scan)).await {
+    match tokio::task::spawn_blocking(move || bluetooth_info::lookup_device(&q.addr, q.scan)).await
+    {
         Ok(lookup) => Json(lookup).into_response(),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,

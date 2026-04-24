@@ -6,8 +6,10 @@
 mod common;
 
 use proptest::prelude::*;
+use rusthome_app::RunError;
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
-use rusthome_core::{ConfigSnapshot, ObservationEvent, RunError, State};
+use rusthome_app::ConfigSnapshot;
+use rusthome_core::{ObservationEvent, State};
 use rusthome_infra::Journal;
 use rusthome_rules::Registry;
 use uuid::Uuid;
@@ -39,7 +41,10 @@ fn run_motion_chain(n: usize) -> (State, String) {
 }
 
 /// Same V0 motion under §6.6 caps: journal and result identical across two runs.
-fn run_motion_limited(max_events_per_run: u64, max_events_generated_per_root: u64) -> (State, String, Result<(), RunError>) {
+fn run_motion_limited(
+    max_events_per_run: u64,
+    max_events_generated_per_root: u64,
+) -> (State, String, Result<(), RunError>) {
     let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();

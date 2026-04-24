@@ -9,7 +9,7 @@ If you need the dashboard on a **LAN or the internet**, do **not** rely on `--bi
 1. Start rusthome on loopback only:
 
    ```bash
-   rusthome serve --data-dir /path/to/data --bind 127.0.0.1:8080
+   cargo run -p rusthome-cli --features serve -- serve --data-dir /path/to/data --bind 127.0.0.1:8080
    ```
 
 2. Configure Caddy or nginx to listen on `:443` (or a LAN IP + TLS) and `reverse_proxy` / `proxy_pass` to `http://127.0.0.1:8080`.

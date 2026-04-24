@@ -1,6 +1,6 @@
 //! Subscribe to an **external** MQTT broker and ingest MQTT publishes (adapter template).
 //!
-//! Uses [`rusthome_app::mqtt_ingest::dispatch_mqtt_publish`] for both observations and commands:
+//! Uses [`rusthome_app::integrations::mqtt::dispatch_mqtt_publish`] for both observations and commands:
 //! - `sensors/motion/{room}` → `MotionDetected`
 //! - `sensors/temperature/{sensor_id}` → `TemperatureReading`
 //! - `sensors/contact/{sensor_id}` → `ContactChanged`
@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use rumqttc::{Client, Event, Incoming, MqttOptions, QoS};
-use rusthome_app::mqtt_ingest::{dispatch_mqtt_publish, wall_millis};
+use rusthome_app::integrations::mqtt::{dispatch_mqtt_publish, wall_millis};
 use rusthome_app::{replay_state, rusthome_file};
 use rusthome_infra::Journal;
 
@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut last_ts = wall_millis();
     eprintln!(
-        "mqtt_ingest: data_dir={} broker={}:{} topic={}",
+        "mqtt: data_dir={} broker={}:{} topic={}",
         args.data_dir.display(),
         args.broker,
         args.port,

@@ -1,6 +1,6 @@
 # Errors: fatal vs recoverable (plan §14.8)
 
-This document is an **initial taxonomy** for operations. Exact variants evolve with code (`RunError`, `ApplyError`, `JournalError`).
+This document is an **initial taxonomy** for operations. Exact variants evolve with code (`rusthome_app::RunError`, `rusthome_core::ApplyError`, load/append errors from `rusthome_infra`, line `schema_version` validation from `rusthome_journal` via `Journal::append` / `load_and_sort` — see [implementation.md](implementation.md#cargo-workspace)).
 
 ## Fatal (stop, intervene, or repair)
 
@@ -8,7 +8,7 @@ This document is an **initial taxonomy** for operations. Exact variants evolve w
 | Source                             | Example                                         | Typical action                                                |
 | ---------------------------------- | ----------------------------------------------- | ------------------------------------------------------------- |
 | `JournalError::Corrupt`            | Invalid JSON, truncated line                    | `rusthome repair` then analysis; restore from backup            |
-| `JournalError::UnsupportedSchemaVersion` | Line `schema_version` outside **2..=3**   | Upgrade tool / migration, or restore backup; see [rules-changelog.md](rules-changelog.md) |
+| `JournalError::UnsupportedSchemaVersion` | Line `schema_version` outside **[`MIN_SUPPORTED_JOURNAL_SCHEMA`, `SCHEMA_VERSION`]** (append/write uses current **5**; load accepts **2..=5** — see `rusthome_journal` and [schema-migration.md](schema-migration.md)) | Upgrade tool / migration, or restore backup; see [rules-changelog.md](rules-changelog.md) |
 | `JournalError::SequenceMismatch`   | Duplicate or gap in `sequence`                  | Same path; journal inconsistent with model                    |
 | `JournalError::TimestampRegressed` | Live append with logical time below last commit | Fix upstream (§3.4); no silent patch                        |
 | Process crash / OOM                | —                                               | Restart; replay from journal (§14.2)                        |

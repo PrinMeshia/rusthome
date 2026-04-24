@@ -1,7 +1,8 @@
 //! EPIC 2 — CommandIo ordering, logical deadline, max 1 retry after Timeout.
 
+use rusthome_app::ConfigSnapshot;
 use rusthome_core::{
-    apply_event, ApplyError, ConfigSnapshot, FactEvent, PhysicalProjectionMode, Provenance, State,
+    apply_event, ApplyError, FactEvent, PhysicalProjectionMode, Provenance, State,
 };
 
 #[test]

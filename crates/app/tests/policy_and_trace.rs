@@ -2,10 +2,12 @@
 
 mod common;
 
-use rusthome_app::{ingest_observation_with_causal_traced, replay_state, RunLimits};
+use rusthome_app::{
+    ingest_observation_with_causal_traced, replay_state, ConfigSnapshot, RunError, RunLimits,
+};
 use rusthome_core::{
-    apply_event, ConfigSnapshot, Event, FactEvent, ObservationEvent, PhysicalProjectionMode,
-    Provenance, RunError, State, StateView,
+    apply_event, Event, FactEvent, ObservationEvent, PhysicalProjectionMode, Provenance, State,
+    StateView,
 };
 use rusthome_infra::{load_and_sort, verify_contiguous_sequence, Journal, JournalAppend};
 use rusthome_rules::Registry;
@@ -59,10 +61,7 @@ fn io_anchored_rejects_derived_light_from_rule() {
             assert_eq!(er.error_type, "run.io_anchored_derived_actuator");
             assert!(er.context.contains("IoAnchored"));
         }
-        _ => panic!(
-            "last line must be ErrorOccurred, got {:?}",
-            last.event
-        ),
+        _ => panic!("last line must be ErrorOccurred, got {:?}", last.event),
     }
 }
 

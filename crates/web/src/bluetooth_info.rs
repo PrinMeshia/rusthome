@@ -207,11 +207,15 @@ fn parse_bluetoothctl_info(mac: &str, text: &str) -> BluetoothDeviceInfo {
                 }
             }
             "Battery Percentage" => {
-                if let Some(pct) = val.split_whitespace().find_map(|s| {
-                    s.trim_end_matches(')').parse::<u8>().ok()
-                }) {
+                if let Some(pct) = val
+                    .split_whitespace()
+                    .find_map(|s| s.trim_end_matches(')').parse::<u8>().ok())
+                {
                     i.battery_percentage = Some(pct.min(100));
-                } else if let Some(hex) = val.strip_prefix("0x").and_then(|s| s.split_whitespace().next()) {
+                } else if let Some(hex) = val
+                    .strip_prefix("0x")
+                    .and_then(|s| s.split_whitespace().next())
+                {
                     if let Ok(n) = u8::from_str_radix(hex, 16) {
                         i.battery_percentage = Some(n.min(100));
                     }
@@ -414,7 +418,9 @@ fn snapshot_linux() -> BluetoothSnapshot {
             }
         }
         if !any_ctl_ok && !adapters.is_empty() && notes.is_empty() {
-            notes.push("bluetoothctl did not return controller details (is `bluetooth` running?).".into());
+            notes.push(
+                "bluetoothctl did not return controller details (is `bluetooth` running?).".into(),
+            );
         }
     } else {
         notes.push(
@@ -471,8 +477,8 @@ fn list_sysfs_adapters(rfkill_soft_blocked: Option<bool>) -> Vec<BluetoothAdapte
         let p = e.path();
         let address = read_file_trim(p.join("address")).unwrap_or_default();
         let name = read_file_trim(p.join("name")).unwrap_or_default();
-        let device_class = read_file_trim(p.join("class"))
-            .or_else(|| read_file_trim(p.join("device/class")));
+        let device_class =
+            read_file_trim(p.join("class")).or_else(|| read_file_trim(p.join("device/class")));
 
         out.push(BluetoothAdapter {
             hci_device: hci,
@@ -509,7 +515,10 @@ fn read_bluetooth_rfkill_soft_blocked() -> Option<bool> {
 
 #[cfg(target_os = "linux")]
 fn bluetoothctl_available() -> bool {
-    Command::new("bluetoothctl").arg("--version").output().is_ok()
+    Command::new("bluetoothctl")
+        .arg("--version")
+        .output()
+        .is_ok()
 }
 
 #[cfg(target_os = "linux")]

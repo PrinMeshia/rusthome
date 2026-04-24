@@ -5,7 +5,8 @@ mod common;
 use std::path::Path;
 
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
-use rusthome_core::{ConfigSnapshot, ObservationEvent, State, StateView};
+use rusthome_app::ConfigSnapshot;
+use rusthome_core::{ObservationEvent, State, StateView};
 use rusthome_infra::Journal;
 use rusthome_rules::Registry;
 use uuid::Uuid;
@@ -201,7 +202,11 @@ fn contact_toggles() {
         RunLimits::default(),
     )
     .unwrap();
-    assert_eq!(state.contact_open("window"), Some(false), "contact now closed");
+    assert_eq!(
+        state.contact_open("window"),
+        Some(false),
+        "contact now closed"
+    );
 }
 
 #[test]

@@ -4,8 +4,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use rusthome_core::{
-    CommandEvent, CommandIoPhase, ConfigSnapshot, Event, EventKind, FactEvent, LightActuatorState,
-    ObservationEvent, PhysicalProjectionMode, Provenance, Rule, RuleContext, State,
+    CommandEvent, CommandIoPhase, DefaultHostConfig, Event, EventKind, FactEvent, LightActuatorState,
+    HostRuntimeConfig, ObservationEvent, Provenance, Rule, RuleContext, State,
 };
 use uuid::Uuid;
 
@@ -62,18 +62,27 @@ impl Registry {
     }
 
     pub fn v0_default() -> Self {
-        Self::from_rules(crate::bundle::arc_rules_v0(), crate::bundle::SENSOR_WHITELIST)
+        Self::from_rules(
+            crate::bundle::arc_rules_v0(),
+            crate::bundle::SENSOR_WHITELIST,
+        )
     }
 
     /// Lights + IO + sensors + logging, **without** `NotifyUser` (R2).
     /// Default snapshot digest: `rules-home` ([`RulesPreset::Home`](crate::preset::RulesPreset)).
     pub fn home_default() -> Self {
-        Self::from_rules(crate::bundle::arc_rules_home(), crate::bundle::SENSOR_WHITELIST)
+        Self::from_rules(
+            crate::bundle::arc_rules_home(),
+            crate::bundle::SENSOR_WHITELIST,
+        )
     }
 
     /// Subset: motion → light + IO (R1 + R3 + R7), sensor facts (R8 + R9).
     pub fn minimal_default() -> Self {
-        Self::from_rules(crate::bundle::arc_rules_minimal(), crate::bundle::SENSOR_WHITELIST)
+        Self::from_rules(
+            crate::bundle::arc_rules_minimal(),
+            crate::bundle::SENSOR_WHITELIST,
+        )
     }
 
     pub fn rules(&self) -> &[Arc<dyn Rule>] {
@@ -158,13 +167,10 @@ impl Registry {
     /// Dry-run `eval` with canonical samples — §6.12.1 / §6.10 enforcement.
     fn validate_emissions_match_produces(&self) -> Result<(), RegistryError> {
         let state = State::new();
-        let config = ConfigSnapshot {
-            physical_projection_mode: PhysicalProjectionMode::Simulation,
-            ..Default::default()
-        };
+        let config = DefaultHostConfig::default();
         let ctx = RuleContext {
             state: &state,
-            config: &config,
+            config: &config as &dyn HostRuntimeConfig,
             trigger_timestamp: 0,
             causal_chain_id: Uuid::nil(),
             parent_sequence: None,
@@ -245,26 +251,20 @@ fn sample_event(kind: EventKind) -> Option<Event> {
                 millidegrees_c: 21000,
             }))
         }
-        EventKind::ContactChanged => {
-            Some(Event::Observation(ObservationEvent::ContactChanged {
-                sensor_id: "_".into(),
-                open: true,
-            }))
-        }
-        EventKind::TemperatureRecorded => {
-            Some(Event::Fact(FactEvent::TemperatureRecorded {
-                sensor_id: "_".into(),
-                millidegrees_c: 21000,
-                provenance: Provenance::Observed,
-            }))
-        }
-        EventKind::ContactStateChanged => {
-            Some(Event::Fact(FactEvent::ContactStateChanged {
-                sensor_id: "_".into(),
-                open: true,
-                provenance: Provenance::Observed,
-            }))
-        }
+        EventKind::ContactChanged => Some(Event::Observation(ObservationEvent::ContactChanged {
+            sensor_id: "_".into(),
+            open: true,
+        })),
+        EventKind::TemperatureRecorded => Some(Event::Fact(FactEvent::TemperatureRecorded {
+            sensor_id: "_".into(),
+            millidegrees_c: 21000,
+            provenance: Provenance::Observed,
+        })),
+        EventKind::ContactStateChanged => Some(Event::Fact(FactEvent::ContactStateChanged {
+            sensor_id: "_".into(),
+            open: true,
+            provenance: Provenance::Observed,
+        })),
         EventKind::HumidityReading => Some(Event::Observation(ObservationEvent::HumidityReading {
             sensor_id: "_".into(),
             permille_rh: 500,
@@ -310,10 +310,9 @@ impl Default for Registry {
 mod tests {
     use super::*;
     use crate::whitelist::ExceptionalFamilyTransition;
-    use rusthome_core::{
-        deterministic_command_id, CommandEvent, Event, FactEvent, ObservationEvent, Provenance,
-        Rule, RuleContext,
-    };
+    use rusthome_core::{CommandEvent, Event, FactEvent, ObservationEvent, Provenance, Rule, RuleContext};
+
+    use crate::deterministic_command_id;
 
     static F2F_WHITELIST: &[ExceptionalFamilyTransition] = &[ExceptionalFamilyTransition {
         rule_id: "f2f",
@@ -339,9 +338,7 @@ mod tests {
         let h_ids: Vec<_> = h.rules().iter().map(|r| r.rule_id()).collect();
         assert_eq!(
             v_ids,
-            vec![
-                "R1", "R2", "R3", "R7", "R4", "R5", "R8", "R9", "R10", "R11", "R12", "R13"
-            ]
+            vec!["R1", "R2", "R3", "R7", "R4", "R5", "R8", "R9", "R10", "R11", "R12", "R13"]
         );
         assert_eq!(
             h_ids,

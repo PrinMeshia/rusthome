@@ -2,7 +2,7 @@
 
 **Contract version:** `2` (bump when topic shapes or payload rules change; describe migration in [integration.md](integration.md) and [rules-changelog.md](rules-changelog.md) if rules depend on new fields).
 
-**Source of truth:** `[crates/app/src/mqtt_ingest.rs](../crates/app/src/mqtt_ingest.rs)` (`observation_from_mqtt`, `command_from_mqtt`, `dispatch_mqtt_publish`).
+**Source of truth:** `[crates/app/src/integrations/mqtt.rs](../crates/app/src/integrations/mqtt.rs)` (`observation_from_mqtt`, `command_from_mqtt`, `dispatch_mqtt_publish`).
 
 **Timestamps:** Logical journal time uses `next_ts(last_ts, candidate)` where `candidate` is optional JSON `"ts"` (milliseconds) or **wall-clock** via `wall_millis()` when absent. The **domain model** stays free of mandatory wall-clock; MQTT is an edge adapter (plan §3).
 
@@ -68,5 +68,5 @@ Do **not** rely on foreign timestamps for ordering across devices unless you als
 
 | Version | Summary                                                                |
 | ------- | ---------------------------------------------------------------------- |
-| 1       | Initial documented contract (matches `mqtt_ingest` as of Phase 2 plan) |
+| 1       | Initial documented contract (matches `integrations::mqtt` as of cleanup) |
 | 2       | Adds `sensors/humidity/{entity}` → `HumidityReading` (permille RH 0–1000) |

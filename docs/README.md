@@ -17,10 +17,20 @@ Index of files under `docs/` — avoid duplicating detail in the root [README](.
 | [io-lifecycle.md](io-lifecycle.md) | `CommandIo` cycle §6.16 |
 | [perf-assumptions.md](perf-assumptions.md) | Load assumptions, bench, Pi measurements (§7.1) |
 | [testing-core.md](testing-core.md) | Regression checklist: determinism proptests, bench/MQTT scripts |
-| [mqtt-contract.md](mqtt-contract.md) | Versioned MQTT topic/payload contract (`mqtt_ingest`) |
+| [mqtt-contract.md](mqtt-contract.md) | Versioned MQTT topic/payload contract (`integrations::mqtt`) |
 | [scenarios.md](scenarios.md) | Three concrete operator scenarios (motion, commands, Observed) |
 | [ops-data-dir.md](ops-data-dir.md) | Backups, journal, systemd pointers, security reminder |
 | [presence-bridge.md](presence-bridge.md) | Optional BLE presence → MQTT/journal (after core stable) |
 | [roadmap-2-semaines.md](roadmap-2-semaines.md) | Sprint history + **next steps** (short backlog) |
 
 Example config: [../configs/rusthome.example.toml](../configs/rusthome.example.toml). Web proxy examples: [../configs/Caddyfile.rusthome.example](../configs/Caddyfile.rusthome.example), [../configs/nginx-rusthome.conf.example](../configs/nginx-rusthome.conf.example).
+
+## Fast loop: engine + rules only (no web)
+
+For day-to-day work on the journal, reducer, and rules — **without** building `rusthome-web`:
+
+```bash
+cargo test -p rusthome-core -p rusthome-journal -p rusthome-app -p rusthome-infra -p rusthome-rules
+```
+
+The **`minimal`** rules preset (digest `rules-minimal`, R1+R3+R7) is the smallest motion→light story; see [user-rules.md](user-rules.md) and [rules-changelog.md](rules-changelog.md). CI and releases still use `cargo test --workspace` to include the CLI and the web crate.

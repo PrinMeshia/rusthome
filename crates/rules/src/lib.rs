@@ -1,12 +1,14 @@
 //! V0 rules — §16 scenario (R1–R5 + R7), presets and registry.
 
 mod bundle;
+mod command_id;
 mod family_transitions;
 mod preset;
 mod registry;
 mod rules_impl;
 mod whitelist;
 
+pub use command_id::{deterministic_command_id, COMMAND_ID_NAMESPACE};
 pub use preset::RulesPreset;
 pub use registry::{Registry, RegistryError, MAX_CONSUMED_EVENT_TYPES_PER_RULE};
 pub use rules_impl::{

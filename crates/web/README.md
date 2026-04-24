@@ -18,7 +18,7 @@ Pages use a shared **sticky shell**: brand + main nav (`%%MAIN_NAV%%` from `html
 
 ## Live updates (SSE)
 
-With **`rusthome serve`** and the **embedded MQTT broker**, each successful MQTT ingest that appends to the journal notifies a broadcast channel. **`GET /api/live`** exposes a **Server-Sent Events** stream (JSON payload `{}` per update, plus periodic keep-alives). The dashboard loads with **`livePush: true`** in `#rh-dashboard-config` and opens an **`EventSource`** to `/api/live`, then **debounces** (~80 ms) and calls the same **`refresh()`** as polling — so a motion sensor published over MQTT can update the UI almost immediately.
+With **`rusthome serve`** (CLI built with `cargo build -p rusthome-cli --features serve`) and the **embedded MQTT broker**, each successful MQTT ingest that appends to the journal notifies a broadcast channel. **`GET /api/live`** exposes a **Server-Sent Events** stream (JSON payload `{}` per update, plus periodic keep-alives). The dashboard loads with **`livePush: true`** in `#rh-dashboard-config` and opens an **`EventSource`** to `/api/live`, then **debounces** (~80 ms) and calls the same **`refresh()`** as polling — so a motion sensor published over MQTT can update the UI almost immediately.
 
 This path is **not** available for standalone **`rusthome-web`** or **`rusthome serve --no-broker`** (no in-process ingest). External writes to the journal (e.g. another `rusthome emit` process) are not pushed until the next poll or page reload.
 

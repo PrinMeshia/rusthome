@@ -4,10 +4,11 @@ mod common;
 
 use std::path::Path;
 
-use rusthome_app::mqtt_ingest::{dispatch_mqtt_publish, wall_millis};
+use rusthome_app::integrations::mqtt::{dispatch_mqtt_publish, wall_millis};
 use rusthome_app::replay_state;
 use rusthome_app::RunLimits;
-use rusthome_core::{ConfigSnapshot, State, StateView};
+use rusthome_app::ConfigSnapshot;
+use rusthome_core::{State, StateView};
 use rusthome_infra::Journal;
 use rusthome_rules::Registry;
 

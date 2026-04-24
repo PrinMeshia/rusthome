@@ -4,10 +4,10 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
-use tokio::sync::broadcast;
-use rusthome_app::mqtt_ingest::{dispatch_mqtt_publish, wall_millis};
+use rusthome_app::integrations::mqtt::{dispatch_mqtt_publish, wall_millis};
 use rusthome_app::replay_state;
 use rusthome_infra::Journal;
+use tokio::sync::broadcast;
 
 use crate::config;
 

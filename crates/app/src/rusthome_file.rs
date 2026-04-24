@@ -1,4 +1,4 @@
-//! Optional `{data-dir}/rusthome.toml` — rules preset + runtime parameters ([`ConfigSnapshot`](rusthome_core::ConfigSnapshot)).
+//! Optional `{data-dir}/rusthome.toml` — rules preset + runtime parameters ([`ConfigSnapshot`](crate::ConfigSnapshot)).
 //!
 //! Shared by the CLI and library examples so adapters match `rusthome …` behaviour.
 
@@ -6,8 +6,9 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use crate::ConfigSnapshot;
 use crate::RunLimits;
-use rusthome_core::{ConfigSnapshot, PhysicalProjectionMode};
+use rusthome_core::PhysicalProjectionMode;
 use rusthome_rules::RulesPreset;
 
 /// Optional `[zigbee2mqtt]` — MQTT bridge control when Zigbee2MQTT shares the same broker as `rusthome serve`.
@@ -76,7 +77,10 @@ pub fn validate_rusthome_file(file: &RusthomeFile) -> Result<(), String> {
         let t = s.trim();
         if !t.is_empty() {
             let _: RulesPreset = t.parse().map_err(|e| {
-                format!("rules_preset: {e} (expected one of: {})", RulesPreset::PRESET_IDS)
+                format!(
+                    "rules_preset: {e} (expected one of: {})",
+                    RulesPreset::PRESET_IDS
+                )
             })?;
         }
     }
@@ -109,9 +113,7 @@ fn validate_zigbee2mqtt_config(z: &Zigbee2MqttConfig) -> Result<(), String> {
             return Err("zigbee2mqtt.mqtt_topic_prefix: must not be empty when set".into());
         }
         if t.contains('#') || t.contains('+') || t.contains(' ') {
-            return Err(
-                "zigbee2mqtt.mqtt_topic_prefix: must not contain #, +, or spaces".into(),
-            );
+            return Err("zigbee2mqtt.mqtt_topic_prefix: must not contain #, +, or spaces".into());
         }
     }
     if let Some(s) = z.permit_join_seconds {
@@ -296,7 +298,10 @@ mod tests {
         };
         validate_rusthome_file(&f).unwrap();
         let cfg = build_runtime_config(&f, true);
-        assert_eq!(cfg.physical_projection_mode, PhysicalProjectionMode::IoAnchored);
+        assert_eq!(
+            cfg.physical_projection_mode,
+            PhysicalProjectionMode::IoAnchored
+        );
     }
 
     #[test]
@@ -307,7 +312,10 @@ mod tests {
         };
         validate_rusthome_file(&f).unwrap();
         let cfg = build_runtime_config(&f, false);
-        assert_eq!(cfg.physical_projection_mode, PhysicalProjectionMode::IoAnchored);
+        assert_eq!(
+            cfg.physical_projection_mode,
+            PhysicalProjectionMode::IoAnchored
+        );
     }
 
     #[test]
@@ -328,11 +336,7 @@ mod tests {
         .unwrap();
         let e = load_rusthome_file(dir.path()).unwrap_err();
         assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
-        assert!(
-            e.to_string().contains("physical_projection_mode"),
-            "{}",
-            e
-        );
+        assert!(e.to_string().contains("physical_projection_mode"), "{}", e);
     }
 
     #[test]
@@ -350,11 +354,7 @@ mod tests {
     #[test]
     fn bad_rules_preset_in_file_fails() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("rusthome.toml"),
-            r#"rules_preset = "nope""#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("rusthome.toml"), r#"rules_preset = "nope""#).unwrap();
         let e = load_rusthome_file(dir.path()).unwrap_err();
         assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
     }

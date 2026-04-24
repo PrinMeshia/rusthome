@@ -17,9 +17,10 @@ pub fn kind_family(k: EventKind) -> Family {
         | EventKind::TemperatureReading
         | EventKind::ContactChanged
         | EventKind::HumidityReading => Family::Observation,
-        EventKind::TurnOnLight | EventKind::TurnOffLight | EventKind::NotifyUser | EventKind::LogUsage => {
-            Family::Command
-        }
+        EventKind::TurnOnLight
+        | EventKind::TurnOffLight
+        | EventKind::NotifyUser
+        | EventKind::LogUsage => Family::Command,
         EventKind::LightOn
         | EventKind::LightOff
         | EventKind::UsageLogged

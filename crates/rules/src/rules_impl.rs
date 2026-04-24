@@ -1,7 +1,9 @@
 use rusthome_core::{
-    deterministic_command_id, CommandEvent, CommandIoPhase, Event, EventKind, FactEvent,
-    ObservationEvent, PhysicalProjectionMode, Provenance, Rule, RuleContext,
+    CommandEvent, CommandIoPhase, Event, EventKind, FactEvent, ObservationEvent,
+    PhysicalProjectionMode, Provenance, Rule, RuleContext,
 };
+
+use crate::deterministic_command_id;
 
 pub struct R1;
 
@@ -118,7 +120,7 @@ impl Rule for R3 {
     fn eval(&self, event: &Event, ctx: &RuleContext<'_>) -> Vec<Event> {
         match event {
             Event::Command(CommandEvent::TurnOnLight { room, command_id }) => {
-                let prov = match ctx.config.physical_projection_mode {
+                let prov = match ctx.config.physical_projection_mode() {
                     PhysicalProjectionMode::Simulation => Provenance::Derived,
                     PhysicalProjectionMode::IoAnchored => {
                         // V0 demo: still derived unless IO layer emits ObservedFact separately
@@ -127,7 +129,7 @@ impl Rule for R3 {
                 };
                 let deadline = ctx
                     .trigger_timestamp
-                    .checked_add(ctx.config.io_timeout_logical_delta);
+                    .checked_add(ctx.config.io_timeout_logical_delta());
                 let room = room.clone();
                 let cid = *command_id;
                 vec![
@@ -186,13 +188,13 @@ impl Rule for R7 {
     fn eval(&self, event: &Event, ctx: &RuleContext<'_>) -> Vec<Event> {
         match event {
             Event::Command(CommandEvent::TurnOffLight { room, command_id }) => {
-                let prov = match ctx.config.physical_projection_mode {
+                let prov = match ctx.config.physical_projection_mode() {
                     PhysicalProjectionMode::Simulation => Provenance::Derived,
                     PhysicalProjectionMode::IoAnchored => Provenance::Derived,
                 };
                 let deadline = ctx
                     .trigger_timestamp
-                    .checked_add(ctx.config.io_timeout_logical_delta);
+                    .checked_add(ctx.config.io_timeout_logical_delta());
                 let room = room.clone();
                 let cid = *command_id;
                 vec![

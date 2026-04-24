@@ -5,9 +5,10 @@
 
 mod common;
 
-use rusthome_app::mqtt_ingest::{dispatch_mqtt_publish, wall_millis};
+use rusthome_app::integrations::mqtt::{dispatch_mqtt_publish, wall_millis};
 use rusthome_app::RunLimits;
-use rusthome_core::{ConfigSnapshot, State, StateView};
+use rusthome_app::ConfigSnapshot;
+use rusthome_core::{State, StateView};
 use rusthome_infra::Journal;
 use rusthome_rules::Registry;
 
@@ -32,10 +33,7 @@ fn motion_via_mqtt_turns_on_light_home_preset() {
     )
     .unwrap();
 
-    assert!(
-        out.is_some(),
-        "motion topic should ingest; got {out:?}"
-    );
+    assert!(out.is_some(), "motion topic should ingest; got {out:?}");
     assert!(
         state.light_on("living"),
         "home preset R1 should turn on light for room from topic"

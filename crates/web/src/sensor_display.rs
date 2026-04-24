@@ -101,9 +101,8 @@ pub fn save(path: &Path, d: &SensorDisplay) -> io::Result<()> {
     }
     let mut to_save = d.clone();
     normalize_document(&mut to_save);
-    let json = serde_json::to_vec_pretty(&to_save).map_err(|e| {
-        io::Error::new(io::ErrorKind::InvalidInput, format!("serde: {e}"))
-    })?;
+    let json = serde_json::to_vec_pretty(&to_save)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("serde: {e}")))?;
     let tmp = path.with_extension("json.tmp");
     fs::write(&tmp, json)?;
     fs::rename(&tmp, path)?;
@@ -113,11 +112,7 @@ pub fn save(path: &Path, d: &SensorDisplay) -> io::Result<()> {
 /// Add empty metadata entries for every sensor id present in `state` (does not remove orphans).
 pub fn merge_from_state(state: &State, d: &mut SensorDisplay) {
     d.schema_version = d.schema_version.max(1).min(MAX_SCHEMA_VERSION);
-    merge_family_keys(
-        d,
-        FAMILY_TEMPERATURE,
-        state.temperature_readings().keys(),
-    );
+    merge_family_keys(d, FAMILY_TEMPERATURE, state.temperature_readings().keys());
     merge_family_keys(d, FAMILY_HUMIDITY, state.humidity_readings().keys());
     merge_family_keys(d, FAMILY_CONTACT, state.contact_states().keys());
 }
@@ -127,7 +122,10 @@ fn merge_family_keys<'a, I: Iterator<Item = &'a String>>(
     family: &str,
     ids: I,
 ) {
-    let map = d.entries.entry(family.to_string()).or_insert_with(BTreeMap::new);
+    let map = d
+        .entries
+        .entry(family.to_string())
+        .or_insert_with(BTreeMap::new);
     for id in ids {
         map.entry(id.clone()).or_insert_with(SensorMeta::default);
     }

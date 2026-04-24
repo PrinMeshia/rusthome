@@ -2,14 +2,14 @@
 
 use uuid::Uuid;
 
-use crate::config::ConfigSnapshot;
 use crate::event::{Event, EventKind};
+use crate::host_runtime_config::HostRuntimeConfig;
 use crate::view::StateView;
 
 /// Context for rule evaluation — pure inputs (plan §6.12).
 pub struct RuleContext<'a> {
     pub state: &'a dyn StateView,
-    pub config: &'a ConfigSnapshot,
+    pub config: &'a dyn HostRuntimeConfig,
     /// Logical timestamp of the triggering event (journal line, §3).
     pub trigger_timestamp: i64,
     /// Root causation id for this cascade (plan §15).

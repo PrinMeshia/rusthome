@@ -3,8 +3,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use rusthome_core::Event;
+
 use crate::error::JournalSchemaError;
-use crate::event::Event;
 
 /// Current schema written by this binary on append (plan §8.2).
 pub const SCHEMA_VERSION: u32 = 5;

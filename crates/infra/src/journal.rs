@@ -5,7 +5,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
-use rusthome_core::{Event, JournalEntry, JournalSchemaError, SCHEMA_VERSION};
+use rusthome_core::Event;
+use rusthome_journal::{JournalEntry, JournalSchemaError, SCHEMA_VERSION};
 use uuid::Uuid;
 
 use crate::canon::to_canonical_line;
@@ -182,16 +183,14 @@ pub fn load_and_sort(path: &Path) -> Result<Vec<JournalEntry>, JournalError> {
         })?;
         let line_no = i + 1;
         entry.validate_supported_schema().map_err(|e| match e {
-            JournalSchemaError::UnsupportedVersion {
-                found,
-                min,
-                max,
-            } => JournalError::UnsupportedSchemaVersion {
-                line: line_no,
-                found,
-                min,
-                max,
-            },
+            JournalSchemaError::UnsupportedVersion { found, min, max } => {
+                JournalError::UnsupportedSchemaVersion {
+                    line: line_no,
+                    found,
+                    min,
+                    max,
+                }
+            }
         })?;
         entries.push(entry);
     }

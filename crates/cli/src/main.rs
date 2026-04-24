@@ -1,4 +1,6 @@
 mod config;
+
+#[cfg(feature = "serve")]
 mod serve;
 
 use std::path::{Path, PathBuf};
@@ -8,8 +10,9 @@ use clap::{Parser, Subcommand, ValueEnum};
 use rusthome_app::{
     append_observed_light_fact, ingest_command_with_causal, ingest_command_with_causal_traced,
     ingest_observation, ingest_observation_with_causal_traced, replay_state, ObservedLightAppend,
+    RuleEvaluationRecord,
 };
-use rusthome_core::{CommandEvent, ObservationEvent, PhysicalProjectionMode, RuleEvaluationRecord};
+use rusthome_core::{CommandEvent, ObservationEvent, PhysicalProjectionMode};
 use rusthome_infra::{
     load_and_sort, repair_journal, verify_contiguous_sequence, Journal, Snapshot,
 };
@@ -105,7 +108,7 @@ enum Commands {
         #[arg(long, default_value_t = 50)]
         count: u32,
     },
-    /// All-in-one: embedded MQTT broker + ingest adapter + web dashboard.
+    /// All-in-one: embedded MQTT broker + ingest adapter + web dashboard. Requires a build with `--features serve`.
     Serve {
         #[arg(long, default_value = "127.0.0.1:8080")]
         bind: String,
@@ -158,7 +161,7 @@ fn save_snapshot(data_dir: &Path, rules_digest: &str) -> Result<(), Box<dyn std:
     let last_seq = entries.last().map(|e| e.sequence).unwrap_or(0);
     let state = replay_state(&path)?;
     let snap = Snapshot::from_state(
-        rusthome_core::SCHEMA_VERSION,
+        rusthome_journal::SCHEMA_VERSION,
         last_seq,
         &state,
         rules_digest,
@@ -171,6 +174,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     std::fs::create_dir_all(&cli.data_dir)?;
 
+    #[cfg(not(feature = "serve"))]
+    if matches!(&cli.command, Commands::Serve { .. }) {
+        eprintln!("error: `rusthome serve` is not available in this build.");
+        eprintln!();
+        eprintln!("Rebuild with Cargo feature `serve` (Axum + optional embedded MQTT), for example:");
+        eprintln!("  cargo build  -p rusthome-cli --features serve");
+        eprintln!("  cargo run    -p rusthome-cli --features serve -- serve --data-dir data");
+        eprintln!("  rusthome serve  # after installing with: cargo install --path crates/cli --features serve");
+        std::process::exit(2);
+    }
+
+    #[cfg(feature = "serve")]
     if let Commands::Serve {
         bind,
         mqtt_port,
@@ -246,8 +261,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
             }
             if write_snapshot {
-                let digest =
-                    config::resolve_rules_digest(snapshot_rules_digest.as_deref(), preset);
+                let digest = config::resolve_rules_digest(snapshot_rules_digest.as_deref(), preset);
                 save_snapshot(&cli.data_dir, &digest)?;
                 println!("snapshot written");
             }
@@ -325,8 +339,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
             }
             if write_snapshot {
-                let digest =
-                    config::resolve_rules_digest(snapshot_rules_digest.as_deref(), preset);
+                let digest = config::resolve_rules_digest(snapshot_rules_digest.as_deref(), preset);
                 save_snapshot(&cli.data_dir, &digest)?;
                 println!("snapshot written");
             }
@@ -406,8 +419,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None,
             )?;
             if write_snapshot {
-                let digest =
-                    config::resolve_rules_digest(snapshot_rules_digest.as_deref(), preset);
+                let digest = config::resolve_rules_digest(snapshot_rules_digest.as_deref(), preset);
                 save_snapshot(&cli.data_dir, &digest)?;
                 println!("snapshot written");
             }
@@ -436,7 +448,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let ms = t0.elapsed().as_millis();
             println!("bench_emit count={count} elapsed_ms={ms}");
         }
-        Commands::Serve { .. } => unreachable!("handled above"),
+        Commands::Serve { .. } => unreachable!("serve: handled at start of main()"),
     }
 
     Ok(())

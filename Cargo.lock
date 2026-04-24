@@ -1384,6 +1384,7 @@ dependencies = [
  "rumqttc",
  "rusthome-core",
  "rusthome-infra",
+ "rusthome-journal",
  "rusthome-rules",
  "serde",
  "serde_json",
@@ -1403,6 +1404,7 @@ dependencies = [
  "rusthome-app",
  "rusthome-core",
  "rusthome-infra",
+ "rusthome-journal",
  "rusthome-rules",
  "rusthome-web",
  "serde",
@@ -1429,11 +1431,22 @@ name = "rusthome-infra"
 version = "0.1.0"
 dependencies = [
  "rusthome-core",
+ "rusthome-journal",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "rusthome-journal"
+version = "0.1.0"
+dependencies = [
+ "rusthome-core",
+ "serde",
+ "thiserror 2.0.18",
  "uuid",
 ]
 

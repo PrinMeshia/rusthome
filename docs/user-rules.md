@@ -5,13 +5,13 @@ Today the **V0** demo ships light / log rules in `rusthome-rules` (`R1`–`R5`).
 ## Already decoupled
 
 - **Pipeline**: `drain_fifo` / `ingest_*` take `&Registry` and rules via `Arc` in the registry.
-- **Contract**: the [`Rule`](../crates/core/src/rules.rs) trait in `rusthome-core` — pure `eval` (no IO, no wall clock).
+- **Contract**: the [`Rule`](../crates/core/src/rules.rs) trait in `rusthome-core` — pure `eval` (no IO, no wall clock). [`RuleContext`](../crates/core/src/rules.rs) carries `&dyn HostRuntimeConfig` (trait in `rusthome-core`); the process supplies a concrete snapshot such as `rusthome_app::ConfigSnapshot` (TOML/CLI) at runtime. For stable persisted **`command_id`** values from rules, use `rusthome_rules::deterministic_command_id` (not `rusthome-core`).
 - **Extension**: `Registry::from_rules` (`../crates/rules/src/registry.rs`) accepts `Vec<Arc<dyn Rule>>`; `Registry::v0_default()` is only a bundled preset.
 - **CLI / config**: presets `v0` (R1–R5), `home` (R1+R3+R4+R5, no R2 notify), `minimal` (R1+R3) — details in [implementation.md](implementation.md#cli-rusthome) and [configs/rusthome.example.toml](../configs/rusthome.example.toml). New preset: [`preset.rs`](../crates/rules/src/preset.rs) + [`bundle.rs`](../crates/rules/src/bundle.rs) / `Registry::…_default()` + `RulesPreset::default_rules_digest`.
 
 ## Adding rules in Rust (recommended for V0+)
 
-1. Create a binary or lib crate (e.g. `rusthome-rules-home`) depending on `rusthome-core`.
+1. Create a binary or lib crate (e.g. `rusthome-rules-home`) depending on `rusthome-core` (and on `rusthome-rules` if you reuse `deterministic_command_id` and bundle helpers).
 2. Implement `Rule` with owned fields if needed (`id: String`, `consumes: Vec<EventKind>`, …) and return `&str` / slices borrowed from `self`.
 3. Build `Registry::from_rules(vec![Arc::new(MyRule), …], &[])` then `validate_boot()`.
 4. Wire the CLI (new preset in `preset.rs` + `load_registry`) or a future service to load that registry instead of built-in presets.

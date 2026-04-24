@@ -33,7 +33,8 @@ fn sort_object_keys(v: Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusthome_core::{Event, JournalEntry, ObservationEvent, SCHEMA_VERSION};
+    use rusthome_core::{Event, ObservationEvent};
+    use rusthome_journal::{JournalEntry, SCHEMA_VERSION};
     use uuid::Uuid;
 
     #[test]

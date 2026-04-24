@@ -19,9 +19,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use rusthome_app::{
-    append_observed_light_fact, replay_state, rusthome_file, ObservedLightAppend,
-};
+use rusthome_app::{append_observed_light_fact, replay_state, rusthome_file, ObservedLightAppend};
 use rusthome_infra::Journal;
 use uuid::Uuid;
 

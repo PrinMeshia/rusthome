@@ -23,9 +23,7 @@ pub(crate) fn bind_looks_loopback_only(bind: &str) -> bool {
 
 fn is_loopback_host(host: &str) -> bool {
     let h = host.trim();
-    h == "127.0.0.1"
-        || h.eq_ignore_ascii_case("localhost")
-        || h == "::1"
+    h == "127.0.0.1" || h.eq_ignore_ascii_case("localhost") || h == "::1"
 }
 
 pub(crate) fn security_banner_html(listen: &str) -> String {

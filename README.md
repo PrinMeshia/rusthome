@@ -1,231 +1,169 @@
-# Project: Deterministic Home Automation (V0)
+# rusthome — deterministic home automation (V0)
 
-**Documentation**: index **[docs/README.md](docs/README.md)** — start with **[docs/implementation.md](docs/implementation.md)** (code state). Edge adapters: **[docs/integration.md](docs/integration.md)**. Long-form reference: [plan.md](plan.md).
+**rusthome** is a Rust **event-sourced** engine: observations and commands are appended as lines in a **JSON Lines** journal; **state** is the projection obtained by replaying **facts** in order; **rules** react to each event in a FIFO pipeline and may append more lines. The focus is **reproducibility** (same journal → same state) and **clear crate boundaries** — not a finished home product.
 
-## 1. Project goal
-
-Build a minimal, deterministic, extensible home automation engine focused on:
-
-- an event-driven model
-- reproducible execution (replay)
-- strict separation of concerns
-- a solid base for future extensibility (plugins, WASM)
-
-V0 is not meant to be complete; it validates the foundations.
+V0 validates the architecture; many product features are intentionally out of scope (see [Scope](#scope-and-out-of-scope)).
 
 ---
 
-## 2. Core principles
+## Documentation (read this first)
 
-### 2.1 Determinism
-
-Same input → same output, always.
-
-Implications:
-
-- no wall clock in domain logic (`Utc::now()`, etc.)
-- **logical** timestamps supplied explicitly (e.g. CLI `emit --timestamp`)
-- replay matches initial behaviour (same journal, same binary, same config)
-
-### 2.2 Event-driven
-
-The system is built on **persisted events** in a journal. Three **families** (implemented): **Fact**, **Command**, **Observation** — see [docs/implementation.md](docs/implementation.md).
-
-### 2.3 Strict separation of concerns
-
-
-| Layer        | Crate            | Role                                                    |
-| ------------ | ---------------- | ------------------------------------------------------- |
-| Pure domain  | `rusthome-core`  | Types, reducer (`apply_event` **facts only**), contracts |
-| Rules        | `rusthome-rules` | `bundle` (`v0` R1–R5, `home` without R2, `minimal` R1+R3), `Registry::from_rules`, boot validation |
-| Orchestration | `rusthome-app`   | FIFO, synchronous append of derived events, run caps     |
-| Persistence  | `rusthome-infra` | JSONL, `sequence`, snapshot, repair                     |
-| Interface    | `rusthome-cli`   | Command line                                            |
-| Web (dev)    | `rusthome serve` / `rusthome-web` | Dashboard `/`, system `/system`, JSON (`/api/state`, `/api/system`, …) — **no auth**; default bind `127.0.0.1`; use a reverse proxy if you listen on the LAN  |
-
-
-### 2.4 Explicit time
-
-The **timestamp** on a journal line is **logical** ordering time (not wall-clock time or real latency between cascade steps). See plan §3.7.
-
-Forbidden in domain logic: deriving decisions from `SystemTime` / `Utc::now()`.
-
-### 2.5 Derived data
-
-Values computed from event context (logical timestamp, projected state) do not replace persisting **facts** for durable state.
+| If you want… | Open |
+| ------------ | ---- |
+| **What the code does today** (crates, CLI, on-disk files, tests) | [`docs/implementation.md`](docs/implementation.md) |
+| **Index of all `docs/`** | [`docs/README.md`](docs/README.md) |
+| **Adapters, MQTT lab, `serve`, library examples** | [`docs/integration.md`](docs/integration.md) |
+| **Long-form design reference** | [`plan.md`](plan.md) |
 
 ---
 
-## 3. Repository layout (Rust)
+## Quick commands
+
+```bash
+# Full test suite (CI-style)
+cargo test --workspace
+
+# CLI help
+cargo run -p rusthome-cli -- --help
+
+# Optional lab stack: embedded broker + web UI (not in default build)
+cargo run -p rusthome-cli --features serve -- serve --bind 127.0.0.1:8080
+```
+
+Default data directory for the CLI is `./data` (override with `--data-dir` or `RUSTHOME_DATA_DIR`). Example config: [`configs/rusthome.example.toml`](configs/rusthome.example.toml).
+
+---
+
+## How the workspace is split
+
+Each crate has one main job. **Dependency direction** (simplified): `journal` → `core`; `rules` → `core`; `infra` → `core` + `journal`; `app` → `core` + `journal` + `rules` + `infra`; `cli` → `app` + …
+
+| Layer | Crate | What it owns |
+| ----- | ----- | ------------ |
+| **Domain** | `rusthome-core` | `Event` variants, `State`, `apply_event` / `validate_fact_for_append`, `Rule` / `StateView`, `HostRuntimeConfig` trait. **No** file/network I/O, **no** TOML, **no** `JournalEntry` line type. |
+| **Journal line** | `rusthome-journal` | `JournalEntry` (metadata + flattened `Event`), `schema_version`, `SCHEMA_VERSION` / supported range, `JournalSchemaError`. |
+| **Rules** | `rusthome-rules` | Bundled rules (R1…), `Registry`, `deterministic_command_id`, boot validation. |
+| **Orchestration** | `rusthome-app` | FIFO `drain_fifo`, `ConfigSnapshot` (TOML), `RunError`, optional rule trace, MQTT ingest when used. |
+| **Persistence** | `rusthome-infra` | JSONL read/write, sort, `sequence`, snapshot, repair, append dedup on `command_id`. |
+| **CLI** | `rusthome-cli` | The `rusthome` binary. |
+| **Web (lab)** | `rusthome-web` + `serve` | Read-only dashboard + JSON APIs when built with `--features serve` — **no auth**; bind `127.0.0.1` unless you know what you are doing. |
+
+The **rule engine** (loop + append) and **`RunError`** / **`RuleEvaluationRecord`** live in **app**; **rule implementations** live in **rules**.
+
+---
+
+## Repository layout
 
 ```
 rusthome/
-  Cargo.toml                 # workspace
+  Cargo.toml              # workspace
   crates/
-    core/                    # rusthome-core
-    rules/                   # rusthome-rules
-    app/                     # rusthome-app
-    infra/                   # rusthome-infra
-    cli/                     # rusthome-cli (rusthome binary)
-  configs/                   # e.g. rusthome.example.toml
-  data/                      # default CLI: journal + snapshot
-  docs/                      # index README.md, implementation.md, …
-  plan.md                    # long plan slot (often points to docs/)
-```
-
-Useful commands:
-
-```bash
-cargo test --workspace
-cargo run -p rusthome-cli -- --help
+    core/                 # rusthome-core
+    journal/              # rusthome-journal
+    rules/                # rusthome-rules
+    app/                  # rusthome-app
+    infra/                # rusthome-infra
+    cli/                  # rusthome-cli (rusthome binary)
+    web/                  # rusthome-web (optional, feature-gated in CLI)
+  configs/                # e.g. rusthome.example.toml
+  data/                   # default CLI: journal + snapshot
+  docs/                   # see docs/README.md
+  plan.md                 # long design slot (may defer to docs/)
 ```
 
 ---
 
-## 4. Core
+## Core ideas
 
-Responsibilities:
+### Determinism
 
-- event enums and `JournalEntry`
-- `State` (projection), `StateView` for rules
-- `apply_event` / `validate_fact_for_append` (**Result**, fail-fast domain)
-- `Rule` / `RuleContext` traits
+For paths that use **fixed logical time** (e.g. CLI `emit` with explicit `--timestamp`, replay of a **closed** journal), **same inputs → same journal / same state** — see the [determinism section](docs/implementation.md#determinism-contract) in `docs/implementation.md`.
 
-Constraints:
+**Lab exception:** MQTT and `serve` use **wall-assisted** logical timestamps (`wall_millis` / `next_ts`). Journals produced that way are **not** bit-identical to a hand-built CLI journal — by design: lab = live, not a golden file.
 
-- **no file/network IO**
-- limited dependencies (serde, uuid, thiserror) — no `chrono` for time logic
+**Domain code** (`rusthome-core` reducer, `State`, `Rule::eval`) must **not** use the wall clock for business logic.
 
-The **rule engine** (FIFO loop, append) lives in **app**; **rule implementations** live in **rules**.
+### Event-driven model
 
----
+The system is driven by **persisted** lines. Three **families** are implemented: **Fact**, **Command**, **Observation** (see `docs/implementation.md`).
 
-## 5. Event model (journal)
+### Time on the journal
 
-Each persisted line includes:
+Each line has a **logical** `timestamp` (`i64`). **Global order** is **`(timestamp, sequence)`** — `sequence` is a monotonic counter assigned on append. Live append **rejects** a timestamp **below** the last committed one (consistency over completeness; plan §3.4). **Do not** use `SystemTime` / `Utc::now()` inside domain rules for ordering decisions.
 
-- **`timestamp`**: `i64` (logical time)
-- **`sequence`**: `u64` — **global** monotonic counter assigned by infra on each successful append (tie-break when timestamps tie)
-- **`event_id`**: optional (traceability), **not** used for global order
-- **`causal_chain_id`**, **`parent_sequence`** / **`parent_event_id`**, **`rule_id`** (derived): observability §15
-- **body**: Fact / Command / Observation (serde tag)
+### Derived vs persisted
 
-**Total order**: `(timestamp, sequence)` only.
-
-On **live** append, a timestamp strictly below the last committed one is **rejected** (consistency > completeness — plan §3.4).
+Values derived from the journal context do not replace **persisted facts** as the source of durable state.
 
 ---
 
-## 6. State
+## Journal line shape (summary)
 
-- Represents the **projection** replayable from journal **facts**.
-- Internal fields exposed read-only via **`StateView`** for rules; mutation **only** through `apply_event` on facts.
-- Determinism-sensitive collections: **`BTreeMap`** for lights (no `HashMap` for projected state).
+Each line combines metadata and a **flattened** `Event` body (full detail: `docs/implementation.md`).
 
----
+- `timestamp`, `sequence` — **total order**
+- `schema_version` — on-disk era (current append and supported load range: see `rusthome-journal` and `docs/schema-migration.md`)
+- optional: `event_id`, `causal_chain_id`, `parent_*`, `rule_id`, `correlation_id`, `trace_id` (observability §15)
 
-## 7. Rule engine (implemented behaviour)
-
-- A rule declares **`consumes`**, **`produces`**, **`rule_id`**, **`priority`**, **`namespaces`**.
-- For each dequeued event: if **Fact**, **`apply_event`** first, then rule evaluation (rules can consume the newly true fact — e.g. plan §16).
-- Actions are sorted by **`(priority desc, rule_id, action_ordinal)`**, then executed sequentially; each emitted event is **appended** immediately then enqueued (FIFO).
-
-Configurable caps (`RunLimits`): processed events, generated events, wall-clock budget, queue size — plan §6.6.
+On live append, Infra enforces the timestamp gate and assigns `sequence`.
 
 ---
 
-## 8. Ordering
+## State and rules (summary)
 
-1. **`timestamp`** (logical time)
-2. **`sequence`** (global, persisted)
+- **State** is the **projection** from **facts** in journal order. **Commands** and **observations** do not mutate projection directly; they drive rules, which may append **facts**.
 
-Do not rely on network arrival order without a layer that respects §3.4.
+- **Rules** declare `consumes` / `produces` / `rule_id` / `priority` / `namespaces`. After a dequeued **fact**, the reducer runs **`apply_event`**; then rules run. Emissions are ordered by **priority (desc)**, then **`rule_id`**, then order inside the rule; each synthetic is **appended** then enqueued (FIFO). Caps: `RunLimits` (event limits, wall budget, queue size — plan §6.6).
 
----
+- **Conflict handling:** numeric priorities, then `rule_id` lexicographic, then stable per-rule order — **no randomness** in the engine.
 
-## 9. Conflict handling / tie-breaks
-
-- Numeric priorities on actions, then **`rule_id`** lexicographic, then stable action order inside the rule.
-- No random behaviour.
+- **Lights** in projected state use **`BTreeMap`** (not `HashMap`) for stable iteration where it matters.
 
 ---
 
-## 10. CLI (V0 implemented)
+## CLI (V0)
 
-| Command | Role (summary) |
-| -------- | ---------------- |
-| `emit` | Motion + cascade; `--timestamp`; `--trace-file`; `rusthome.toml` |
-| `turn-off-light` | `TurnOffLight` + R7; `--trace-file`; optional `--command-id` / `--causal-chain-id` |
-| `observed-light` | Observed light fact + reconciliation §14.7 |
-| `state` / `replay` | JSON projection; double replay |
-| `snapshot` / `repair` | Snapshot + `state_hash`; journal repair §8.5 |
-| `explain` / `rules-doc` | Cascade by `causal_chain_id`; Mermaid consumes→produces |
-| `bench` | Micro-bench ingest (tmp journal) |
+| Command | What it does (short) |
+| ------- | -------------------- |
+| `emit` | Append motion (and cascade); requires `--timestamp`; optional `rusthome.toml`, `--trace-file` |
+| `turn-off-light` | `TurnOffLight` + R7; optional `--command-id` / `--causal-chain-id` |
+| `observed-light` | Observed light fact + reconciliation (§14.7) |
+| `state` / `replay` | Print or verify projection; double-replay tests |
+| `snapshot` / `repair` | Snapshot + `state_hash`; repair corrupted JSONL (§8.5) |
+| `explain` / `rules-doc` | Causality and Mermaid rule graph |
+| `bench` | Micro-benchmark on a temp journal |
 
-**Web (lab):** `rusthome serve` (same as `rusthome-web --data-dir …`) → [http://127.0.0.1:8080](http://127.0.0.1:8080) — read-only projection + JSON. Global `--data-dir` / `RUSTHOME_DATA_DIR`; `--bind` on `serve`. No auth; keep local bind.
+**Web (lab):** `rusthome serve` after `cargo build -p rusthome-cli --features serve` — e.g. [http://127.0.0.1:8080](http://127.0.0.1:8080). Read-only; use a reverse proxy if exposed beyond loopback.
 
-Flags, env (`RUSTHOME_DATA_DIR`, `RUSTHOME_RULES_PRESET`), `rusthome.toml`, digests: **[docs/implementation.md](docs/implementation.md#cli-rusthome)** · `rusthome --help` · [configs/rusthome.example.toml](configs/rusthome.example.toml). Library templates: [docs/integration.md](docs/integration.md) (`append_observed`, `ingest_turn_off` examples).
-
----
-
-## 11. Replay
-
-- Read sorted journal, apply **facts only** to rebuild `State` (commands/observations do not mutate projection directly).
-- Replay / `state` mode: **no append** to the canonical journal in the current CLI flow.
+Full flags, env vars (`RUSTHOME_DATA_DIR`, `RUSTHOME_RULES_PRESET`), presets, digests: **[`docs/implementation.md` — CLI](docs/implementation.md#cli-rusthome)** and `rusthome --help`. Library-style usage: [`docs/integration.md`](docs/integration.md).
 
 ---
 
-## 12. Security (future)
+## Replay
 
-Planned but out of V0 scope:
-
-- WASM plugins, sandbox, permissions, zero trust
+Load the journal in **`(timestamp, sequence)`** order, apply **facts only** to rebuild `State`. The usual `state` / `replay` flow does **not** append to the canonical journal.
 
 ---
 
-## 13. V0 scope (current code)
+## Scope and out-of-scope
 
-**Included (implemented)**:
+**In scope (implemented in tree):** canonical JSON Lines journal, snapshot, repair, optional `fsync`, three families + `CommandIo`, facts-only reducer, FIFO pipeline, rule trace §15, IoAnchored guard §14.5, registry boot checks, CLI listed above, integration tests and proptests.
 
-- **canonical** JSON Lines journal (sorted keys §8.3), snapshot, repair, optional `fsync`
-- three families + `CommandIo` fact (§6.16, state no-op); facts-only reducer, pre-append validation
-- FIFO pipeline + rule trace §15 + **IoAnchored** guard §14.5 + per-root cap §6.6.2
-- registry + boot validation (cycles, fan-in, family transitions, `produces` consistency)
-- CLI (`explain`, `rules-doc`, `bench`, …)
-- §16 tests + policy / trace / canon
+**Out of scope or partial:** full UI, WASM plugins, multi-node cluster, p95 SLO under real load (see `docs/perf-assumptions.md`), **real device drivers** (network/GPIO) — the **journal model** (`CommandIo`, `command_id`, dedup) is ready; wiring physical devices is up to integrators. See also [`docs/roadmap-2-semaines.md`](docs/roadmap-2-semaines.md).
 
-**Excluded or partial**:
-
-- UI, WASM plugins, multi-node
-- **Real device** integration (network, GPIO, etc.) — engine and `CommandIo` / `command_id` are in place on the journal side
+**Security (future):** sandboxed plugins, auth on the web UI, zero-trust — not V0.
 
 ---
 
-## 14. Long plan scope
+## Success criteria (V0)
 
-Milestones from the detailed plan (in or out of repo) guided the architecture. **Exact code state**: [docs/implementation.md](docs/implementation.md); possible next steps: [docs/roadmap-2-semaines.md](docs/roadmap-2-semaines.md).
-
----
-
-## 15. Success criteria
-
-- full determinism (ordering + rule purity in rules)
-- identical replay
-- clear architecture (crates)
-- testable code (`cargo test --workspace`)
+- Reproducible ordering and **pure** rule evaluation (no wall clock in domain)
+- **Identical replay** from the same journal
+- **Testable** workspace: `cargo test --workspace`
+- **Explainable** layout: crates and docs map to behavior
 
 ---
 
-## 16. Main risks
+## Risks to watch
 
-- over-engineering
-- scope creep
-- unnecessary complexity
-
----
-
-## 17. Guiding principle
-
-Build simple, deterministic, explainable.
-
-Everything else can follow.
+Over-engineering, scope creep, unnecessary abstraction — the intended direction is **simple, deterministic, explainable**; everything else can come later.

@@ -10,7 +10,7 @@ Intéressant si vous voulez des scénarios du type « téléphone vu → mode ma
 
 ## Option A — Aucun changement de schéma (recommandé pour prototypes)
 
-Publier vers des topics **déjà** reconnus par [`mqtt_ingest`](mqtt-contract.md), par exemple :
+Publier vers des topics **déjà** reconnus par le [contrat MQTT](mqtt-contract.md) (`integrations::mqtt`), par exemple :
 
 - Traduire « device X visible » en **proxy de mouvement** : `mosquitto_pub -t 'sensors/motion/presence-hall' -m ''` avec une pièce fixe ou JSON `{"room":"hall"}`.
 - Ou déclencher un petit script qui appelle `rusthome emit` / API interne si vous préférez le CLI au MQTT.

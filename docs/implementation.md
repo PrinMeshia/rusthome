@@ -2,6 +2,29 @@
 
 This document describes **what is in code** today. Index of `docs/`: [README.md](README.md). The long plan may live in or out of repo: [plan.md](../plan.md) (often defers here for ground truth).
 
+## Architecture scope (cleanup decisions)
+
+- **CLI default build** ([`crates/cli`](../crates/cli/Cargo.toml)): `default` features are **empty** — no `rusthome-web` or `rumqttd` — so `cargo build -p rusthome-cli` only links the engine-facing commands. The `serve` subcommand (Axum + optional embedded broker) is enabled with `--features serve`.
+- **Determinism vs MQTT** (`rusthome serve` / [`integrations::mqtt`](../crates/app/src/integrations/mqtt.rs)): the MQTT path uses `wall_millis` + `next_ts` to assign **logical** timestamps; that sequence is **not** replay-faithful the same way as explicit `emit --timestamp` — treat lab ingest as a separate contract from strict replay tests.
+- **Core domain** (`rusthome-core`): all persisted `Event` variants **stay** in the build so on-disk JSONL (schemas 2–5) always round-trips. The `event` module is **split into subfiles** (lights/usage vs sensor/IO/audit groupings) for structure only — not for compile-time removal of variants. The **journal line** envelope is **`rusthome-journal`** (`JournalEntry`, `schema_version` range).
+- **Orchestration errors** ([`RunError`](../crates/app/src/run_error.rs)) and **§15 trace lines** ([`RuleEvaluationRecord`](../crates/app/src/rule_trace.rs)) live in **`rusthome-app`** with the FIFO engine; the core exposes [`ApplyError`](../crates/core/src/error.rs) for pure reducer validation; line schema validation is [`JournalSchemaError`](../crates/journal/src/error.rs) in `rusthome-journal`.
+- **Host runtime policy for rules**: [`HostRuntimeConfig`](../crates/core/src/host_runtime_config.rs) (trait) + [`DefaultHostConfig`](../crates/core/src/host_runtime_config.rs) in `rusthome-core`; concrete TOML snapshot [`ConfigSnapshot`](../crates/app/src/config_snapshot.rs) in **`rusthome-app`**. **Deterministic command ids** for rule emissions: [`deterministic_command_id`](../crates/rules/src/command_id.rs) in **`rusthome-rules`** (not `rusthome-core`).
+
+## Determinism contract
+
+What is **intended to be** reproducible and comparable across runs:
+
+- **Double replay** / **`rusthome replay`**: same `events.jsonl` → same `State` (see tests).
+- **CLI** subcommands that append with **explicit** `--timestamp` (and deterministic IDs where documented): same inputs → same journal bytes **within** a single machine clock epoch for IDs if any random `Uuid` is used — use `--command-id` / `--causal-chain-id` for fixed journals.
+
+What is **not** offered as a golden, byte-stable contract:
+
+- Ingest over MQTT (embedded or external broker): logical time is **derived** from `wall_millis` and monotonic `next_ts`, so two runs are not expected to match a hand-built `emit` journal.
+
+Rule of thumb: **golden tests** use CLI or direct library ingest with explicit logical times; **lab** uses MQTT/`serve` for integration only.
+
+Link back: [README — Determinism](../README.md#determinism).
+
 ## Plan conformance (checklist)
 
 Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomplete or TBD · **Missing** = not in repo (or only in long plan).
@@ -35,13 +58,13 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 | §8.5             | Corruption, fail fast, repair                                           | OK       | Strict parse, `repair_journal` + CLI `repair`.                                                                    |
 | §9 / CLI         | No implicit `now`                                                       | OK       | `emit --timestamp` required.                                                                                   |
 | §14.1            | Non-idempotence documented                                              | OK       | Comments on `replay_state` / ingest in `rusthome-app`.                                                       |
-| §14.3            | `command_id` required + append dedup                                    | OK       | `CommandEvent` requires `Uuid`; `deterministic_command_id` (v5) in rules; `Journal::append` → `DuplicateCommandSkipped` if id already seen (disk index at `open`). |
+| §14.3            | `command_id` required + append dedup                                    | OK       | `CommandEvent` requires `Uuid`; `rusthome_rules::deterministic_command_id` (v5); `Journal::append` → `DuplicateCommandSkipped` if id already seen (disk index at `open`). |
 | §14.5            | `physical_projection_mode`                                              | OK       | Test `io_anchored_rejects_derived_light_from_rule` + CLI `--io-anchored`.                                          |
 | §14.6            | Dead letter / quarantine ideas                                          | OK       | [reconciliation.md](reconciliation.md) + [errors.md](errors.md).                                                  |
 | §14.7            | Journal ↔ world reconciliation                                          | OK       | [reconciliation.md](reconciliation.md) — Observed / Derived invariant + `StateCorrectedFromObservation` + `append_observed_light_fact`. |
 | §14.8            | Fatal vs recoverable errors                                             | OK       | [errors.md](errors.md).                                                                                             |
 | §15              | `rule_id`, `parent_`*, `causal_chain_id`                                | OK       | Persisted on relevant lines.                                                                             |
-| §15              | Trace `matched` / `not matched`                                         | OK       | `RuleEvaluationRecord` + `emit --trace-file` + pipeline param; one line per rule and processed event.   |
+| §15              | Trace `matched` / `not matched`                                         | OK       | `rusthome_app::RuleEvaluationRecord` + `emit --trace-file` + pipeline param; one line per rule and processed event.   |
 | §15              | `correlation_id` / `trace_id` schema reserved                           | OK       | Optional fields on `JournalEntry` (propagated to derived); root often `null`.                               |
 | §19–§20          | `rules_digest` / rules version                                          | OK       | Snapshot + [rules-changelog.md](rules-changelog.md).                                                                |
 | §22–§23          | Auto graph doc, onboarding guide                                        | OK       | `rules-doc` (Mermaid) + [onboarding-rules.md](onboarding-rules.md).                                                   |
@@ -56,12 +79,13 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 
 | Crate              | Role                                                                                                                                                            |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **rusthome-core**  | Event types (3 families), `State`, `apply_event` / `validate_fact_for_append`, `JournalEntry`, `Rule` / `StateView` traits, domain errors               |
-| **rusthome-rules** | Demo rules (R1–R5 + R7 `TurnOffLight`), presets `v0` / `home` (no R2) / `minimal`, registry, boot validation (cycles §6.13, fan-in §6.15, family transitions §6.17, `produces` consistency) |
-| **rusthome-app**   | FIFO pipeline + `rusthome_file` module: `rusthome.toml` load, preset resolution, `ConfigSnapshot` + `RunLimits` merge (same as CLI) |
+| **rusthome-core**  | Event types (3 families), `State`, `apply_event` / `validate_fact_for_append`, `Rule` / `StateView` traits, `ApplyError` |
+| **rusthome-journal** | Persisted line shape: `JournalEntry` metadata + flattened `Event`, `SCHEMA_VERSION` / `MIN_SUPPORTED_JOURNAL_SCHEMA`, `JournalSchemaError` on unsupported schema |
+| **rusthome-rules** | Demo rules (R1–R5 + R7 `TurnOffLight`), `deterministic_command_id`, presets `v0` / `home` (no R2) / `minimal`, registry, boot validation (cycles §6.13, fan-in §6.15, family transitions §6.17, `produces` consistency) |
+| **rusthome-app**   | FIFO pipeline, `RunError`, `RuleEvaluationRecord` (§15), `ConfigSnapshot` (TOML + `HostRuntimeConfig`), `rusthome_file` (`rusthome.toml`, presets, `RunLimits`); integrations (`integrations::mqtt`, …) |
 | **rusthome-infra** | **Canonical** JSON Lines journal §8.3, `JournalAppend` / `JournalAppendOutcome` (command dedup §14.3), sort, timestamp gate, snapshot + `state_hash`, `repair_journal`, optional `fsync` |
-| **rusthome-cli**   | `rusthome` binary (clap)                                                                                                                                       |
-| **rusthome-web**   | Library + `rusthome-web` binary; also **`rusthome serve`** (CLI) — read-only Axum: dashboard `/`, system `/system`, JSON APIs incl. `/api/system` (lab; default bind `127.0.0.1:8080`) |
+| **rusthome-cli**   | `rusthome` binary (clap). Optional Cargo feature `serve` pulls in `rusthome-web` + `rumqttd` for the `serve` subcommand. |
+| **rusthome-web**   | Library + `rusthome-web` binary; also **`rusthome serve`** when CLI is built with `--features serve` — read-only Axum: dashboard `/`, system `/system`, JSON APIs incl. `/api/system` (lab; default bind `127.0.0.1:8080`) |
 
 
 **No wall clock** in domain logic: CLI requires explicit `--timestamp` on `emit`; runner uses `Instant` only for run time budget (§6.6.3), not event ordering.
@@ -71,7 +95,7 @@ Legend: **OK** = reasonable V0 match to plan · **Partial** = present but incomp
 Each journal line is a `JournalEntry`: `schema_version`, `timestamp` (logical time), `sequence` (global, assigned by infra on append), `causal_chain_id`, `parent_*`, optional `rule_id` on derived lines, `event_id`, **`correlation_id`**, **`trace_id`** (optional §15), plus flattened serde body `Event`:
 
 - **Fact** — only family reduced by `apply_event`; `Observed` / `Derived` provenance on facts.
-- **Command** — intent; domain fields + **`command_id: Uuid` required** (EPIC 3); determinism via `deterministic_command_id`.
+- **Command** — intent; domain fields + **`command_id: Uuid` required** (EPIC 3); determinism via `rusthome_rules::deterministic_command_id`.
 - **Observation** — inbound signal (e.g. `MotionDetected`).
 - **Error** — `ErrorOccurred` (EPIC 4): logged on drain failures; **not** applied to `State` on replay.
 
@@ -109,6 +133,7 @@ Under `--data-dir` (default: `data/`):
 | `explain --causal <uuid>` | Journal entries for one cascade |
 | `rules-doc` | Mermaid consumes→produces graph |
 | `bench --count N` | Rough ingest measurement (temp journal) |
+| `serve` | Lab: embedded MQTT broker (optional) + web dashboard; **requires** building `rusthome-cli` with `--features serve` |
 | `observed-light --timestamp … --room … --state on|off [--io-anchored] [--write-snapshot]` | **Observed** light fact + correction if **Derived** projection diverges |
 
 Global: `--data-dir` (env `RUSTHOME_DATA_DIR`), `--rules-preset` (env `RUSTHOME_RULES_PRESET`, then file), `--journal-fsync`. `rusthome.toml`: strict parse + validation; optional `[run_limits]` (§6.6) for cascade caps.
@@ -125,7 +150,7 @@ Global: `--data-dir` (env `RUSTHOME_DATA_DIR`), `--rules-preset` (env `RUSTHOME_
 | `GET /api/bluetooth` | JSON Bluetooth: adapters (sysfs + `bluetoothctl show`) and `devices[]` (`bluetoothctl devices`, optional Paired/Connected flags), read-only |
 | `GET /api/health` | `{"ok":true}` |
 
-Run: **`rusthome serve`** (uses global `--data-dir`) or `cargo run -p rusthome-web -- --data-dir data`. **`serve`**: `--bind 127.0.0.1:8080` (default). Env `RUSTHOME_DATA_DIR` supported. **Not hardened** — local / lab only.
+Run: **`rusthome serve`** (uses global `--data-dir`) after `cargo run -p rusthome-cli --features serve --`, or `cargo run -p rusthome-web -- --data-dir data`. **`serve`**: `--bind 127.0.0.1:8080` (default). Env `RUSTHOME_DATA_DIR` supported. **Not hardened** — local / lab only.
 
 **Security:** default bind is loopback. If you use `--bind 0.0.0.0:…` or another non-loopback address, the HTML UI shows a warning banner: APIs and system/Bluetooth views are **unauthenticated**. For LAN access, prefer a **reverse proxy** (TLS, auth, firewall) rather than exposing the Axum port directly. See [web-proxy.md](web-proxy.md) and `configs/Caddyfile.rusthome.example`, `configs/nginx-rusthome.conf.example`.
 
@@ -143,9 +168,10 @@ The **rules** crate ships `clippy.toml` (discourage system time types) for §6.1
 ## Notable tests
 
 - **rusthome-core**: `apply_event`, `validate_fact_for_append`.
-- **rusthome-rules**: V0 registry, reject emission outside `produces`, reject Fact→Fact outside policy.
+- **rusthome-journal**: `JournalEntry` / supported `schema_version` range (line contract, distinct from `Event` body in `rusthome-core`).
+- **rusthome-rules**: V0 registry, `command_id` helpers, reject emission outside `produces`, reject Fact→Fact outside policy.
 - **rusthome-app**: `scenario_16.rs`, `policy_and_trace.rs`, `truth_convergence.rs`, `io_lifecycle.rs`, `command_dedup.rs` (EPIC 3), `error_occurred_replay.rs` (EPIC 4), `determinism_proptest.rs`, `shared_axis_invariant.rs`, `preset_minimal.rs` / `preset_home.rs`; unit tests for `RunLimits` in `pipeline.rs`.
-- **rusthome-infra**: `canon` round-trip.
+- **rusthome-infra**: `canon` round-trip, journal load vs schema.
 
 ```bash
 cargo test --workspace

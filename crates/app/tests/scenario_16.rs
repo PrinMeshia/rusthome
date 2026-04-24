@@ -4,9 +4,11 @@ mod common;
 
 use std::collections::VecDeque;
 
-use rusthome_app::{drain_fifo, ingest_observation_with_causal, replay_state, RunLimits};
+use rusthome_app::{
+    drain_fifo, ingest_observation_with_causal, replay_state, ConfigSnapshot, RunLimits,
+};
 use rusthome_core::{
-    ConfigSnapshot, Event, EventKind, ObservationEvent, PhysicalProjectionMode, State, StateView,
+    Event, EventKind, ObservationEvent, PhysicalProjectionMode, State, StateView,
 };
 use rusthome_infra::{load_and_sort, verify_contiguous_sequence, Journal, JournalAppend};
 use rusthome_rules::Registry;

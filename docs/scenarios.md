@@ -8,7 +8,7 @@ Three **minimal** automations that match the current **rules + MQTT** surface (n
 
 **Try it**
 
-1. `rusthome serve --data-dir ./data` (ou broker externe + `mqtt_motion_ingest`).
+1. `cargo run -p rusthome-cli --features serve -- serve --data-dir ./data` (ou broker externe + `mqtt_motion_ingest`), ou binaire `rusthome-web`.
 2. `mosquitto_pub -t 'sensors/motion/hall' -m ''` (ou `-m hall`).
 3. `rusthome state --data-dir ./data` ou UI `/api/state` — la lumière `hall` est **on**.
 

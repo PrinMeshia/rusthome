@@ -3,7 +3,8 @@
 mod common;
 
 use rusthome_app::{ingest_observation_with_causal, RunLimits};
-use rusthome_core::{ConfigSnapshot, ObservationEvent, State, StateView};
+use rusthome_app::ConfigSnapshot;
+use rusthome_core::{ObservationEvent, State, StateView};
 use rusthome_infra::Journal;
 use rusthome_rules::RulesPreset;
 use uuid::Uuid;
@@ -24,9 +25,7 @@ fn minimal_motion_light_on_without_usage_log() {
         &reg,
         &cfg,
         0,
-        ObservationEvent::MotionDetected {
-            room: room.clone(),
-        },
+        ObservationEvent::MotionDetected { room: room.clone() },
         Uuid::from_u128(0x4D1E_0001),
         limits,
     )

@@ -3,23 +3,29 @@
 //! §14.1 — replay and live processing are **not idempotent**: the same fact replayed twice
 //! applies `apply_event` twice until dedup applies.
 
-pub mod mqtt_ingest;
+pub mod integrations;
+
+mod rule_trace;
+mod run_error;
+
+mod config_snapshot;
 mod pipeline;
 mod reconciliation;
 pub mod rusthome_file;
+
+pub use config_snapshot::ConfigSnapshot;
 
 pub use pipeline::{drain_fifo, RunLimits};
 pub use reconciliation::{
     append_observed_light_fact, correction_for_observed_light, ObservedLightAppend,
 };
+pub use rule_trace::RuleEvaluationRecord;
+pub use run_error::RunError;
 
 use std::collections::VecDeque;
 use std::path::Path;
 
-use rusthome_core::{
-    apply_event, CommandEvent, ConfigSnapshot, Event, ObservationEvent, RuleEvaluationRecord,
-    RunError, State,
-};
+use rusthome_core::{apply_event, CommandEvent, Event, ObservationEvent, State};
 use rusthome_infra::{verify_contiguous_sequence, Journal, JournalAppend, JournalAppendOutcome};
 use rusthome_rules::Registry;
 use uuid::Uuid;

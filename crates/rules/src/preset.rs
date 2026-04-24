@@ -94,7 +94,10 @@ mod tests {
 
     #[test]
     fn parse_minimal() {
-        assert_eq!("minimal".parse::<RulesPreset>().unwrap(), RulesPreset::Minimal);
+        assert_eq!(
+            "minimal".parse::<RulesPreset>().unwrap(),
+            RulesPreset::Minimal
+        );
     }
 
     #[test]

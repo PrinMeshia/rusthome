@@ -7,6 +7,7 @@ description = "Journal JSONL, snapshot, sequence, timestamp gate"
 
 [dependencies]
 rusthome-core = { path = "../core" }
+rusthome-journal = { path = "../journal" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }

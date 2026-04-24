@@ -189,7 +189,10 @@ fn find_serial_by_id(dev: &Path) -> Option<String> {
 }
 
 #[cfg(target_os = "linux")]
-fn udev_properties_linux(device: &str, notes: &mut Vec<String>) -> (Option<String>, Option<String>, Option<String>) {
+fn udev_properties_linux(
+    device: &str,
+    notes: &mut Vec<String>,
+) -> (Option<String>, Option<String>, Option<String>) {
     let Ok(out) = Command::new("udevadm")
         .args(["info", "--query=property", &format!("--name={device}")])
         .output()
@@ -211,8 +214,14 @@ fn udev_properties_linux(device: &str, notes: &mut Vec<String>) -> (Option<Strin
             m.insert(k.to_string(), v.to_string());
         }
     }
-    let vendor_id = m.get("ID_VENDOR_ID").cloned().or_else(|| m.get("ID_USB_VENDOR_ID").cloned());
-    let product_id = m.get("ID_MODEL_ID").cloned().or_else(|| m.get("ID_USB_MODEL_ID").cloned());
+    let vendor_id = m
+        .get("ID_VENDOR_ID")
+        .cloned()
+        .or_else(|| m.get("ID_USB_VENDOR_ID").cloned());
+    let product_id = m
+        .get("ID_MODEL_ID")
+        .cloned()
+        .or_else(|| m.get("ID_USB_MODEL_ID").cloned());
     let product_label = m
         .get("ID_MODEL_FROM_DATABASE")
         .cloned()

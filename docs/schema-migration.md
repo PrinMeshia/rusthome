@@ -1,10 +1,10 @@
 # Journal schema migration (sketch)
 
-This document outlines how to evolve persisted data when adding **new event kinds** or changing the JSON shape of `JournalEntry` lines. The engine already carries a **per-line** `schema_version` (see `rusthome_core::SCHEMA_VERSION`, `MIN_SUPPORTED_JOURNAL_SCHEMA` in [`crates/core/src/journal.rs`](../crates/core/src/journal.rs)).
+This document outlines how to evolve persisted data when adding **new event kinds** or changing the JSON shape of `JournalEntry` lines. The engine already carries a **per-line** `schema_version` (see `rusthome_journal::SCHEMA_VERSION`, `MIN_SUPPORTED_JOURNAL_SCHEMA` in [`crates/journal/src/line.rs`](../crates/journal/src/line.rs)).
 
 ## What exists today
 
-- Each JSONL line is a `JournalEntry` with `schema_version`, metadata (`timestamp`, `sequence`, …), and a flattened [`Event`](../crates/core/src/event.rs) body.
+- Each JSONL line is a `JournalEntry` with `schema_version`, metadata (`timestamp`, `sequence`, …), and a flattened [`Event`](../crates/core/src/event/envelope.rs) body.
 - Append always writes the **current** `SCHEMA_VERSION`.
 - Load validates `schema_version` ∈ `[MIN_SUPPORTED_JOURNAL_SCHEMA, SCHEMA_VERSION]` before replay (see `validate_supported_schema`).
 - Breaking changes are recorded in [rules-changelog.md](rules-changelog.md) alongside digest and rule-set notes.
@@ -12,7 +12,7 @@ This document outlines how to evolve persisted data when adding **new event kind
 ## Bumping `SCHEMA_VERSION`
 
 1. **Domain change**: add or adjust `Event` variants in `rusthome-core`, update serde tagging, and extend `apply_event` / validation as needed.
-2. **Bump** `SCHEMA_VERSION` in `crates/core/src/journal.rs` and adjust `MIN_SUPPORTED_JOURNAL_SCHEMA` only if you intentionally **drop** support for old lines (avoid unless necessary).
+2. **Bump** `SCHEMA_VERSION` in `crates/journal/src/line.rs` and adjust `MIN_SUPPORTED_JOURNAL_SCHEMA` only if you intentionally **drop** support for old lines (avoid unless necessary).
 3. **Tests**: extend `rusthome-infra` journal round-trip tests and any golden JSONL fixtures; run `cargo test --workspace`.
 4. **Document** the change in [rules-changelog.md](rules-changelog.md) (what readers must know when mixing binaries).
 

@@ -3,12 +3,10 @@
 mod common;
 
 use rusthome_app::{
-    append_observed_light_fact, correction_for_observed_light, replay_state, ObservedLightAppend,
-    RunLimits,
+    append_observed_light_fact, correction_for_observed_light, replay_state, ConfigSnapshot,
+    ObservedLightAppend, RunLimits,
 };
-use rusthome_core::{
-    ConfigSnapshot, Event, FactEvent, PhysicalProjectionMode, Provenance, State, StateView,
-};
+use rusthome_core::{Event, FactEvent, PhysicalProjectionMode, Provenance, State, StateView};
 use rusthome_infra::{load_and_sort, verify_contiguous_sequence, Journal, JournalAppend};
 use rusthome_rules::Registry;
 use uuid::Uuid;

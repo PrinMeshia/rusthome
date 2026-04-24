@@ -8,7 +8,7 @@ Minimal **reproductible** path aligned with Phase 2 of the domotic plan:
 
 1. **Build** : `cargo build -p rusthome-cli --release`.
 2. **Data directory** : `mkdir -p ./data` and copy [configs/rusthome.example.toml](../configs/rusthome.example.toml) to `./data/rusthome.toml`; set `rules_preset = "home"` if you want the default [user-rules.md](user-rules.md) home bundle.
-3. **Run** : `rusthome serve --data-dir ./data` (embedded broker on `:1883`, web on `127.0.0.1:8080` unless you change `--bind`).
+3. **Run** : build the CLI with the lab feature, then: `cargo run -p rusthome-cli --features serve -- serve --data-dir ./data` (embedded broker on `:1883`, web on `127.0.0.1:8080` unless you change `--bind`). Or use `rusthome-web` on its own.
 4. **Inject** : from another terminal, `mosquitto_pub -h 127.0.0.1 -p 1883 -t 'sensors/motion/hall' -m ''` (or your bridge publishing the same topics).
 5. **Verify** : `rusthome state --data-dir ./data` or open the dashboard — motion should drive derived light state per rules. Full topic and payload rules: [mqtt-contract.md](mqtt-contract.md). Operator scenarios: [scenarios.md](scenarios.md).
 
@@ -49,7 +49,7 @@ L’**identifiant technique** (`sensor_id` / segment de topic) reste la source d
 | **Library** `rusthome_app::ingest_observation_with_causal`                   | Push `Observation` events (e.g. motion) with your own `causal_chain_id`                                                                                                                                   |
 | **Library** `rusthome_app::ingest_command_with_causal`                       | Push `Command` lines (e.g. `TurnOffLight` from a switch adapter) with your own `causal_chain_id`                                                                                                          |
 | **Library** `rusthome_app::rusthome_file`                                    | Load / validate `{data-dir}/rusthome.toml` — same helpers as the CLI (`load_rusthome_file`, `resolve_rules_preset`, `build_runtime_config`, `build_run_limits`)                                           |
-| **Library** `rusthome_app::mqtt_ingest`                                      | MQTT topic → `[dispatch_mqtt_publish](../crates/app/src/mqtt_ingest.rs)`: observations **and** `commands/light/...` → `TurnOnLight` / `TurnOffLight`; used by `rusthome serve` and the standalone adapter |
+| **Library** `rusthome_app::integrations::mqtt` | MQTT topic → [`dispatch_mqtt_publish`](../crates/app/src/integrations/mqtt.rs): observations **and** `commands/light/...` → `TurnOnLight` / `TurnOffLight`; used by `rusthome serve` (build CLI with `--features serve`) and the standalone adapter |
 | Example `[mqtt_motion_ingest](../crates/app/examples/mqtt_motion_ingest.rs)` | MQTT subscriber for external brokers → `dispatch_mqtt_publish` (subscribe to `sensors/#` and/or `commands/#`)                                                                                             |
 
 
@@ -80,7 +80,7 @@ cargo run -p rusthome-app --example ingest_turn_off -- \
 
 ### MQTT adapter (`[mqtt_motion_ingest.rs](../crates/app/examples/mqtt_motion_ingest.rs)`)
 
-Standalone adapter for connecting to an **external** MQTT broker. Uses the shared `[mqtt_ingest::dispatch_mqtt_publish](../crates/app/src/mqtt_ingest.rs)` entry point:
+Standalone adapter for connecting to an **external** MQTT broker. Uses the shared `[integrations::mqtt::dispatch_mqtt_publish](../crates/app/src/integrations/mqtt.rs)` entry point:
 
 - **Observations**: `sensors/motion/...`, `sensors/temperature/...`, `sensors/contact/...`
 - **Commands**: `commands/light/{room}/on|off` → journal `CommandEvent` (same as the embedded ingest in `rusthome serve`)
@@ -107,7 +107,7 @@ Extend these with your transport; keep **domain logic** in rules, **I/O** in the
 
 ## All-in-one deployment (`rusthome serve`)
 
-`rusthome serve` runs **three components in a single process**:
+Build the binary with **`--features serve`** (see [implementation.md — scope](implementation.md#architecture-scope-cleanup-decisions)). Then `rusthome serve` runs **three components in a single process**:
 
 1. **Embedded MQTT broker** (`rumqttd`) listening on TCP `0.0.0.0:<mqtt-port>` (default 1883)
 2. **Ingest adapter** connected to the broker via an in-process link (zero-copy, no TCP loopback)
@@ -127,7 +127,7 @@ External sensors (Zigbee2MQTT, Tasmota, etc.) connect to the embedded broker ove
 | `commands/light/{room}/off`       | `CommandEvent::TurnOffLight`           |
 
 
-Payload: plain UTF-8 entity name, or JSON (see `[mqtt_ingest](../crates/app/src/mqtt_ingest.rs)` for details). Command topics ignore payload for classification (empty payload is fine).
+Payload: plain UTF-8 entity name, or JSON (see [`integrations/mqtt.rs`](../crates/app/src/integrations/mqtt.rs) for details). Command topics ignore payload for classification (empty payload is fine).
 
 **Subscriptions in `rusthome serve`**: the ingest link subscribes to `**--mqtt-topic**` (default `sensors/#`) **and** always subscribes to `**commands/#`**, so light commands published by the web UI or external clients are ingested without extra flags.
 

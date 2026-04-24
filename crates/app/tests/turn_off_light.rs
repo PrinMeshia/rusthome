@@ -3,11 +3,11 @@
 mod common;
 
 use rusthome_app::{
-    ingest_command_with_causal, ingest_observation_with_causal, replay_state, RunLimits,
+    ingest_command_with_causal, ingest_observation_with_causal, replay_state, ConfigSnapshot,
+    RunError, RunLimits,
 };
 use rusthome_core::{
-    CommandEvent, ConfigSnapshot, Event, ObservationEvent, PhysicalProjectionMode, RunError, State,
-    StateView,
+    CommandEvent, Event, ObservationEvent, PhysicalProjectionMode, State, StateView,
 };
 use rusthome_infra::{load_and_sort, verify_contiguous_sequence, Journal};
 use rusthome_rules::Registry;
@@ -37,9 +37,7 @@ fn turn_off_after_motion_clears_light() {
         &registry,
         &config,
         10,
-        ObservationEvent::MotionDetected {
-            room: room.clone(),
-        },
+        ObservationEvent::MotionDetected { room: room.clone() },
         causal_on,
         limits.clone(),
     )
@@ -100,9 +98,7 @@ fn io_anchored_rejects_derived_light_off_from_r7() {
         &registry,
         &sim,
         1,
-        ObservationEvent::MotionDetected {
-            room: room.clone(),
-        },
+        ObservationEvent::MotionDetected { room: room.clone() },
         causal_on,
         limits.clone(),
     )

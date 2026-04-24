@@ -10,13 +10,13 @@ mod common;
 use std::sync::Arc;
 
 use proptest::prelude::*;
-use rusthome_app::{ingest_observation_with_causal, RunLimits};
+use rusthome_app::{ingest_observation_with_causal, ConfigSnapshot, RunError, RunLimits};
 use rusthome_core::{
-    deterministic_command_id, CommandEvent, ConfigSnapshot, Event, EventKind, FactEvent,
-    ObservationEvent, Rule, RuleContext, RunError, State, StateView,
+    CommandEvent, Event, EventKind, FactEvent, ObservationEvent, Rule, RuleContext, State,
+    StateView,
 };
 use rusthome_infra::Journal;
-use rusthome_rules::{Registry, RegistryError};
+use rusthome_rules::{deterministic_command_id, Registry, RegistryError};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -220,10 +220,7 @@ fn run_deep_single_motion(room: &str, limits: RunLimits) -> (State, String, Resu
     (state, raw, res)
 }
 
-fn run_deep_chain_limited(
-    max_run: u64,
-    max_gen: u64,
-) -> (State, String, Result<(), RunError>) {
+fn run_deep_chain_limited(max_run: u64, max_gen: u64) -> (State, String, Result<(), RunError>) {
     let (_dir, path) = common::temp_events_jsonl();
     let mut journal = Journal::open(&path).unwrap();
     let mut state = State::new();
@@ -301,7 +298,9 @@ fn boot_rejects_cyclic_event_graph() {
         .collect();
     rules.push(Arc::new(CyclicRule));
     let reg = Registry::from_rules(rules, &[]);
-    let err = reg.validate_boot().expect_err("cyclic graph must be rejected");
+    let err = reg
+        .validate_boot()
+        .expect_err("cyclic graph must be rejected");
     assert!(
         matches!(err, RegistryError::CycleDetected),
         "expected CycleDetected, got {err:?}"
